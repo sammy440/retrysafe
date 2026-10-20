@@ -1,12 +1,23 @@
 import { defineConfig } from "tsup";
 
-export default defineConfig({
-  entry: ["src/index.ts"],
-  format: ["esm"],
-  target: "node20",
-  platform: "node",
-  clean: true,
-  // Bundle the workspace core package; keep real npm deps external.
-  noExternal: ["@retrysafe/core"],
-  banner: { js: "#!/usr/bin/env node" },
-});
+export default defineConfig([
+  {
+    entry: ["src/index.ts"],
+    format: ["esm"],
+    target: "node20",
+    platform: "node",
+    clean: true,
+    // Bundle the workspace core package; keep real npm deps external.
+    noExternal: ["@retrysafe/core"],
+    banner: { js: "#!/usr/bin/env node" },
+  },
+  {
+    // Public library entry: `import { defineConfig } from "retrysafe"`.
+    entry: ["src/config.ts"],
+    format: ["esm", "cjs"],
+    target: "node20",
+    platform: "node",
+    noExternal: ["@retrysafe/core"],
+    // Declarations come from `tsc -p tsconfig.dts.json` (TypeScript 7 has no JS API for dts bundlers).
+  },
+]);

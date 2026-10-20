@@ -1,4 +1,4 @@
-import type { AnalysisResult, Effect, Finding, HandlerReport, SourceLocation } from "@retrysafe/core";
+import type { AnalysisResult, Effect, Finding, Guard, HandlerReport, SourceLocation } from "@retrysafe/core";
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const paint = (code: string) => (s: string) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -19,6 +19,14 @@ function effectStatus(e: Effect): { mark: string; reason: string } {
   return { mark: c.yellow("?"), reason: c.dim(e.note ?? "idempotency unknown") };
 }
 
+function guardNote(g: Guard): string {
+  if (g.schema === "unique-constraint") return `${g.kind}, unique constraint in ${g.schemaSource ?? "schema"}`;
+  if (g.schema === "no-unique-constraint") return `${g.kind}, NO unique constraint in ${g.schemaSource ?? "schema"}`;
+  if (g.atomic === false) return `${g.kind}, not atomic`;
+  if (g.atomic === "unknown") return `${g.kind}, atomic if unique constraint (schema not found)`;
+  return g.kind;
+}
+
 export function effectMap(report: HandlerReport): string[] {
   const flaggedBy = new Map<Effect, Finding[]>();
   for (const f of report.findings) if (f.effect) flaggedBy.set(f.effect, [...(flaggedBy.get(f.effect) ?? []), f]);
@@ -26,7 +34,7 @@ export function effectMap(report: HandlerReport): string[] {
     ...report.checks.map((k) => ({ order: k.order, text: `${c.green("✔")} ${pad("verify", 10)} ${pad(k.callee, 34)} ${c.dim(at(k.location))}` })),
     ...report.guards.map((g) => ({
       order: g.order,
-      text: `${c.cyan("◆")} ${pad("guard", 10)} ${pad(g.description, 34)} ${c.dim(at(g.location))}  ${c.dim(g.kind + (g.atomic === false ? ", not atomic" : g.atomic === "unknown" ? ", atomic if unique constraint" : ""))}`,
+      text: `${g.atomic === false ? c.yellow("◆") : c.cyan("◆")} ${pad("guard", 10)} ${pad(g.description, 34)} ${c.dim(at(g.location))}  ${c.dim(guardNote(g))}`,
     })),
     ...report.records
       .filter((r) => r.kind === "marker-write")
@@ -48,6 +56,7 @@ function finding(f: Finding): string[] {
   return [
     `  ${color(f.severity === "error" ? "✖" : "⚠")} ${c.bold(f.rule)}  ${c.dim(`(${f.severity}, ${f.confidence} confidence)`)}  ${at(f.location)}  ${c.dim(`[${f.id}]`)}`,
     `      ${f.message}`,
+    ...(f.suppressionError ? [`      ${c.yellow(`note: ${f.suppressionError}`)}`] : []),
     "      Failing sequence:",
     ...f.failingSequence.map((s, i) => `        ${i + 1}. ${s}`),
     `      Fix: ${f.fix}`,
@@ -58,6 +67,8 @@ function finding(f: Finding): string[] {
 export interface TerminalOptions {
   handlersOnly?: boolean;
   allEffectMaps?: boolean;
+  /** Baseline entries that no longer match a finding. */
+  staleBaseline?: number;
 }
 
 export function renderTerminal(result: AnalysisResult, opts: TerminalOptions = {}): string {
@@ -87,6 +98,12 @@ export function renderTerminal(result: AnalysisResult, opts: TerminalOptions = {
   }
 
   const clean = result.handlers.length - attention.length;
-  lines.push("", `${clean} handler${clean === 1 ? "" : "s"} clean. ${result.findings.length} finding${result.findings.length === 1 ? "" : "s"}.`);
+  const inline = result.suppressed.filter((s) => s.by === "inline").length;
+  const baselined = result.suppressed.length - inline;
+  const parts = [`${clean} handler${clean === 1 ? "" : "s"} clean.`, `${result.findings.length} finding${result.findings.length === 1 ? "" : "s"}.`];
+  if (baselined) parts.push(`${baselined} suppressed by baseline.`);
+  if (inline) parts.push(`${inline} suppressed inline.`);
+  lines.push("", parts.join(" "));
+  if (opts.staleBaseline) lines.push(c.dim(`${opts.staleBaseline} baseline entr${opts.staleBaseline === 1 ? "y no longer matches" : "ies no longer match"}; prune with --update-baseline.`));
   return lines.join("\n");
 }
