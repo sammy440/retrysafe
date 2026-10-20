@@ -17,6 +17,10 @@ export interface Handler {
   provider?: string;
   /** Why this was treated as at-least-once: "path", "signature-verify", "queue", "config". */
   signals: string[];
+  /** Declared in config as never running concurrently with itself. */
+  serialized?: boolean;
+  /** How long the provider keeps retrying (config, then provider facts). */
+  retryWindowHours?: number;
 }
 
 export type EffectKind =
@@ -40,6 +44,8 @@ export interface KeySource {
   /** "nondeterministic": differs on every run (Date.now(), uuid(), ...). "event-field": a property of the payload/job. */
   kind: "nondeterministic" | "event-field" | "constant" | "param" | "unknown";
   text: string;
+  /** For event fields: the property path with local aliases expanded (session.id -> event.data.object.id). */
+  expanded?: string;
   location: SourceLocation;
 }
 
@@ -64,6 +70,14 @@ export interface Effect {
   /** Guards active on the path to this effect. */
   protectedBy: Guard[];
   order: number;
+  /** The effect's promise is not awaited (fire-and-forget, forEach(async ...), void p). */
+  floating?: boolean;
+  /** Inside an in-code retry (p-retry, async-retry, or a retry loop) at this location. */
+  retriedBy?: SourceLocation;
+  /** Fields the write sets (data / set / $set keys), for ordering checks. */
+  fields?: string[];
+  /** Branches taken to reach this effect (if/case/catch ids), outermost first. Two effects can both run only if one's lineage is a prefix of the other's. */
+  branch: string[];
 }
 
 export type GuardKind =
@@ -85,6 +99,15 @@ export interface Guard {
   transaction?: string;
   /** Where the dedupe key comes from. */
   keySources?: KeySource[];
+  /** Table or model the guard reads or writes, and the columns involved. */
+  table?: string;
+  columns?: string[];
+  /** How `atomic` was decided for unique inserts: from the schema, or not known. */
+  schema?: "unique-constraint" | "no-unique-constraint" | "not-found";
+  /** Schema file the decision came from. */
+  schemaSource?: string;
+  /** Expiry of the dedupe key (Redis EX/PX), when set. */
+  ttlSeconds?: number;
 }
 
 /** A step that marks the event as handled: a claim (unique insert, SET NX) or a plain marker write after the work. */
@@ -97,6 +120,36 @@ export interface RecordStep {
   transaction?: string;
   /** For claims: the guard this record also acts as. */
   guard?: Guard;
+  ttlSeconds?: number;
+}
+
+/** An HTTP response the handler sends, or an uncaught throw (which the framework answers with 500). */
+export interface ResponseInfo {
+  status: number;
+  location: SourceLocation;
+  order: number;
+  /** Depth of the call chain it was sent from (0 = handler body). */
+  depth: number;
+  /** What the enclosing branch or catch is handling. */
+  reason?: "signature" | "validation" | "other";
+  implicit?: boolean;
+  /** Sent from a top-level statement of the handler body (not inside a branch). */
+  topLevel: boolean;
+}
+
+export interface CatchInfo {
+  location: SourceLocation;
+  depth: number;
+  rethrows: boolean;
+  /** Status of responses sent from the catch block. */
+  statuses: number[];
+  /** Effects recorded inside the corresponding try block, and their callees. */
+  tryEffects: number;
+  tryEffectCallees: string[];
+  /** The try block verifies a signature or parses the payload. */
+  reason: "signature" | "validation" | "other";
+  /** Reports per-record failures instead (SQS batchItemFailures, job.moveToFailed, nack). */
+  reportsFailure: boolean;
 }
 
 export interface Check {
@@ -124,6 +177,14 @@ export interface Finding {
   fix: string;
   /** Minimal code showing the safe pattern. */
   snippet?: string;
+  /** Set when an inline suppression was found but not honored (e.g. no reason given). */
+  suppressionError?: string;
+}
+
+export interface SuppressedFinding {
+  finding: Finding;
+  by: "inline" | "baseline";
+  reason?: string;
 }
 
 export interface HandlerReport {
@@ -134,6 +195,12 @@ export interface HandlerReport {
   records: RecordStep[];
   /** Calls that undo a claim when the work fails (e.g. redis.del in a catch block). */
   releases: SourceLocation[];
+  responses: ResponseInfo[];
+  catches: CatchInfo[];
+  /** Event types the handler branches on (event.type === "x" / case "x"). */
+  eventTypes: string[];
+  /** The handler compares a version/timestamp before writing (for ordering checks). */
+  checksOrdering: boolean;
   findings: Finding[];
 }
 
@@ -142,5 +209,7 @@ export interface AnalysisResult {
   /** Number of candidate routes/workers inspected, including ones that were not at-least-once. */
   candidates: number;
   handlers: HandlerReport[];
+  /** Active findings: not suppressed inline and not in the baseline. */
   findings: Finding[];
+  suppressed: SuppressedFinding[];
 }

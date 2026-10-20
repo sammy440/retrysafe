@@ -1,0 +1,90 @@
+{
+  "stripe": {
+    "name": "Stripe",
+    "retryWindowHours": 72,
+    "source": "https://docs.stripe.com/webhooks#retries",
+    "dedupeKey": "event.id"
+  },
+  "shopify": {
+    "name": "Shopify",
+    "retryWindowHours": 4,
+    "source": "https://shopify.dev/docs/apps/build/webhooks/troubleshoot",
+    "dedupeKey": "X-Shopify-Webhook-Id header"
+  },
+  "github": {
+    "name": "GitHub",
+    "retryWindowHours": 0,
+    "source": "https://docs.github.com/en/webhooks/using-webhooks/handling-failed-webhook-deliveries",
+    "notes": "No automatic retries; failed deliveries can be redelivered manually for 3 days.",
+    "dedupeKey": "X-GitHub-Delivery header"
+  },
+  "paystack": {
+    "name": "Paystack",
+    "source": "https://support.paystack.com/en/articles/10609026",
+    "notes": "Retry schedule not publicly documented; set providers.paystack.retryWindowHours in config.",
+    "dedupeKey": "event data reference/id"
+  },
+  "flutterwave": {
+    "name": "Flutterwave",
+    "source": "https://developer.flutterwave.com/docs/webhooks",
+    "dedupeKey": "event data id"
+  },
+  "twilio": {
+    "name": "Twilio"
+  },
+  "sendgrid": {
+    "name": "SendGrid"
+  },
+  "resend": {
+    "name": "Resend"
+  },
+  "clerk": {
+    "name": "Clerk"
+  },
+  "paypal": {
+    "name": "PayPal"
+  },
+  "hosts": {
+    "api.stripe.com": {
+      "kind": "payment",
+      "idempotencyHeader": "Idempotency-Key"
+    },
+    "api.paystack.co": {
+      "kind": "payment",
+      "bodyKey": "reference"
+    },
+    "api.flutterwave.com": {
+      "kind": "payment"
+    },
+    "api.sendgrid.com": {
+      "kind": "email"
+    },
+    "api.resend.com": {
+      "kind": "email",
+      "idempotencyHeader": "Idempotency-Key"
+    },
+    "api.postmarkapp.com": {
+      "kind": "email"
+    },
+    "api.mailgun.net": {
+      "kind": "email"
+    },
+    "api.twilio.com": {
+      "kind": "sms"
+    },
+    "hooks.slack.com": {
+      "kind": "http-call"
+    },
+    "slack.com": {
+      "kind": "http-call"
+    },
+    "api.paypal.com": {
+      "kind": "payment",
+      "idempotencyHeader": "PayPal-Request-Id"
+    },
+    "api-m.paypal.com": {
+      "kind": "payment",
+      "idempotencyHeader": "PayPal-Request-Id"
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "pack": "email",
+  "source": "https://resend.com/docs/dashboard/emails/idempotency-keys",
+  "notes": "Only Resend documents an idempotency key (24h retention, second argument). Other providers have none.",
+  "effects": [
+    {
+      "match": {
+        "module": "nodemailer",
+        "callee": "sendMail"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "resend",
+        "callee": "emails.send"
+      },
+      "kind": "email",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "resend",
+        "callee": "batch.send"
+      },
+      "kind": "email",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "@sendgrid/mail",
+        "callee": "send"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "@sendgrid/mail",
+        "callee": "sendMultiple"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "postmark",
+        "callee": "sendEmail"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "postmark",
+        "callee": "sendEmailBatch"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "postmark",
+        "callee": "sendEmailWithTemplate"
+      },
+      "kind": "email",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "mailgun.js",
+        "callee": "messages.create"
+      },
+      "kind": "email",
+      "idempotent": false
+    }
+  ],
+  "verify": []
+}

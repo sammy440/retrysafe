@@ -1,5 +1,5 @@
 import { Node, SyntaxKind, type SourceFile } from "ts-morph";
-import { flatten, moduleOf, resolveFunction, resolveIdentifier, textOf } from "../project/resolve";
+import { flatten, moduleOf, resolveFunction, resolveIdentifier, textOf, unwrap } from "../project/resolve";
 import { pathSignals, type Candidate } from "./types";
 
 const METHODS = new Set(["post", "put", "patch", "all"]);
@@ -31,20 +31,43 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
     if (decl) prefixes.set(decl, prefix);
   }
 
+  // app.use(mw) / router.use("/path", mw): middleware for later routes on the same app or router.
+  const uses: { decl: Node; path: string; nodes: Node[]; pos: number; file: string }[] = [];
+  for (const call of calls) {
+    const callee = call.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== "use") continue;
+    const receiver = flatten(callee.getExpression()).root;
+    if (!isExpress(receiver)) continue;
+    const decl = receiverDecl(receiver);
+    if (!decl) continue;
+    const args = call.getArguments();
+    const path = textOf(args[0]);
+    // Routers mounted with use() are not middleware.
+    const nodes = (path === undefined ? args : args.slice(1)).filter((a) => !(Node.isIdentifier(a) && prefixes.has(receiverDecl(a) ?? a)));
+    uses.push({ decl, path: path ?? "/", nodes, pos: call.getStart(), file: call.getSourceFile().getFilePath() });
+  }
+
   const out: Candidate[] = [];
   for (const call of calls) {
     const callee = call.getExpression();
     if (!Node.isPropertyAccessExpression(callee) || !METHODS.has(callee.getName())) continue;
     const args = call.getArguments();
-    const routePath = textOf(args[0]);
+    // router.route("/hooks").post(handler) carries the path on the route() call.
+    const inner = unwrap(callee.getExpression());
+    const chained = Node.isCallExpression(inner) && Node.isPropertyAccessExpression(inner.getExpression()) && inner.getExpression().getText().endsWith(".route");
+    const routePath = chained ? textOf(inner.getArguments()[0]) : textOf(args[0]);
     const last = args[args.length - 1];
-    if (routePath === undefined || args.length < 2 || !last) continue;
-    const receiver = flatten(callee.getExpression()).root;
+    if (routePath === undefined || args.length < (chained ? 1 : 2) || !last) continue;
+    const receiver = flatten(chained ? (inner.getExpression() as import("ts-morph").PropertyAccessExpression).getExpression() : callee.getExpression()).root;
     if (!isExpress(receiver)) continue;
     const fn = resolveFunction(last);
     if (!fn) continue;
     const decl = receiverDecl(receiver);
     const full = joinPath((decl && prefixes.get(decl)) ?? "", routePath);
+    const routeMiddleware = chained ? args.slice(0, -1) : args.slice(1, -1);
+    const appMiddleware = uses
+      .filter((u) => u.decl === decl && u.file === call.getSourceFile().getFilePath() && u.pos < call.getStart() && joinPath("", routePath).startsWith(joinPath("", u.path)))
+      .flatMap((u) => u.nodes);
     out.push({
       kind: "http-webhook",
       framework: "express",
@@ -54,6 +77,7 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
       anchor: call,
       signals: pathSignals(full),
       alwaysAtLeastOnce: false,
+      middleware: [...appMiddleware, ...routeMiddleware],
     });
   }
   return out;

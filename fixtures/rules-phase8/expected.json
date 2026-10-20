@@ -1,0 +1,8 @@
+{
+  "handlers": [
+    "POST /webhooks/swallow", "POST /webhooks/rethrow", "POST /webhooks/strict", "POST /webhooks/lenient",
+    "POST /webhooks/early-ack", "POST /webhooks/object-key", "POST /webhooks/event-key", "POST /webhooks/retry",
+    "POST /webhooks/retry-keyed", "POST /webhooks/short-ttl", "POST /webhooks/long-ttl",
+    "POST /api/webhooks/floating", "POST /api/webhooks/awaited"
+  ]
+}

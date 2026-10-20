@@ -1,18 +1,22 @@
-import type { Finding, HandlerReport, KeySource } from "../types";
-import { SNIPPETS, consequence, deliveryNarrative, findingId, type Rule } from "./shared";
+import type { HandlerReport, KeySource } from "../types";
+import { SNIPPETS, consequence, deliveryNarrative, type Rule, type RuleFinding } from "./shared";
 
 /** A dedupe or idempotency key built from Date.now(), uuid(), ... is different on every retry, so nothing is deduplicated. */
 export const nondeterministicKey: Rule = {
   id: "nondeterministic-key",
   severity: "error",
-  run(report: HandlerReport): Finding[] {
-    const out: Finding[] = [];
+  docs: {
+    summary: "A dedupe or idempotency key is derived from Date.now(), Math.random(), uuid(), or similar.",
+    why: "The key is different on every delivery, so neither the guard nor the provider recognizes the retry as a duplicate.",
+    safePattern: "Build keys only from values that are identical on every delivery: the provider's event id, the job id, or a business id from the payload.",
+  },
+  run(report: HandlerReport): RuleFinding[] {
+    const out: RuleFinding[] = [];
     const story = deliveryNarrative(report.handler);
     const stable = report.handler.kind === "queue-worker" ? "job.id (or a business id from job.data)" : "the event id from the payload";
 
     const report1 = (src: KeySource, what: string, sequenceEnd: string) => {
       out.push({
-        id: findingId(this.id, report.handler.id, src.location),
         rule: this.id,
         severity: this.severity,
         confidence: "high",

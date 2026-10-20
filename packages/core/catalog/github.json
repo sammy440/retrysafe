@@ -1,0 +1,177 @@
+{
+  "pack": "github",
+  "source": "https://docs.github.com/en/rest",
+  "notes": "The GitHub REST API has no idempotency keys; creating comments, issues, or reviews twice duplicates them.",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "issues.createComment"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "issues.create"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "issues.addLabels"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "pulls.createReview"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "pulls.createReviewComment"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "pulls.create"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "checks.create"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "repos.createRelease"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "repos.createDispatchEvent"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "repos.createCommitComment"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@octokit/rest",
+          "octokit",
+          "@octokit/core",
+          "probot",
+          "@octokit/app"
+        ],
+        "callee": "actions.createWorkflowDispatch"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    }
+  ],
+  "verify": [
+    {
+      "match": {
+        "module": "@octokit/webhooks",
+        "callee": "verify"
+      },
+      "provider": "github"
+    },
+    {
+      "match": {
+        "module": "@octokit/webhooks",
+        "callee": "verifyAndReceive"
+      },
+      "provider": "github"
+    }
+  ]
+}

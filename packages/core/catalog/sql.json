@@ -1,0 +1,37 @@
+{
+  "pack": "sql",
+  "source": "https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "pg",
+          "mysql2",
+          "mysql2/promise",
+          "@neondatabase/serverless",
+          "@vercel/postgres"
+        ],
+        "callee": "query"
+      },
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "classify": "sql"
+    },
+    {
+      "match": {
+        "module": [
+          "pg",
+          "mysql2",
+          "mysql2/promise",
+          "@neondatabase/serverless",
+          "@vercel/postgres"
+        ],
+        "callee": "execute"
+      },
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "classify": "sql"
+    }
+  ],
+  "verify": []
+}

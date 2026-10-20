@@ -1,0 +1,98 @@
+{
+  "pack": "messaging",
+  "source": "https://www.twilio.com/docs/messaging/api/message-resource",
+  "effects": [
+    {
+      "match": {
+        "module": "twilio",
+        "callee": "messages.create"
+      },
+      "kind": "sms",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "twilio",
+        "callee": "calls.create"
+      },
+      "kind": "sms",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "@slack/web-api",
+          "@slack/bolt"
+        ],
+        "callee": "chat.postMessage"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "@slack/webhook",
+        "callee": "send"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "web-push",
+        "callee": "sendNotification"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "firebase-admin",
+        "callee": "messaging.send"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "firebase-admin/messaging",
+        "callee": "send"
+      },
+      "kind": "http-call",
+      "idempotent": false
+    }
+  ],
+  "verify": [
+    {
+      "match": {
+        "module": "twilio",
+        "callee": "validateRequest"
+      },
+      "provider": "twilio"
+    },
+    {
+      "match": {
+        "module": "svix",
+        "callee": "verify"
+      }
+    },
+    {
+      "match": {
+        "module": "standardwebhooks",
+        "callee": "verify"
+      }
+    },
+    {
+      "match": {
+        "module": "crypto",
+        "callee": "createHmac"
+      }
+    },
+    {
+      "match": {
+        "module": "crypto",
+        "callee": "timingSafeEqual"
+      }
+    }
+  ]
+}

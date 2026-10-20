@@ -1,15 +1,31 @@
 import { createHash } from "node:crypto";
-import type { Effect, Finding, Handler, HandlerReport, Severity, SourceLocation } from "../types";
+import type { Effect, Finding, Guard, Handler, HandlerReport, Severity, SourceLocation } from "../types";
+
+/** A finding before it is fingerprinted (ids are assigned by the analyzer, which can see source text). */
+export type RuleFinding = Omit<Finding, "id">;
+
+export interface RuleDocs {
+  /** One line, used in SARIF and listings. */
+  summary: string;
+  /** Why it goes wrong. */
+  why: string;
+  /** The safe pattern, in words. */
+  safePattern: string;
+}
 
 export interface Rule {
   id: string;
   severity: Severity;
-  run(report: HandlerReport): Finding[];
+  docs: RuleDocs;
+  run(report: HandlerReport): RuleFinding[];
 }
 
-/** Stable across runs and unrelated edits elsewhere in the file's handler, so baselines can key on it. */
-export function findingId(rule: string, handlerId: string, loc: SourceLocation): string {
-  return createHash("sha1").update(`${rule}|${handlerId}|${loc.file}:${loc.line}`).digest("hex").slice(0, 8);
+/**
+ * Stable id for baselines and `explain`: built from the rule, the handler, the file, and the text of the
+ * flagged line, so it survives unrelated edits that shift line numbers.
+ */
+export function fingerprint(parts: string[]): string {
+  return createHash("sha1").update(parts.join("|")).digest("hex").slice(0, 8);
 }
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -65,6 +81,11 @@ export function stableId(h: Handler): string {
   return h.kind === "queue-worker" ? "job.id" : "event.id";
 }
 
+/** Guards that can actually stop a duplicate: a unique insert the schema shows is unconstrained does not. */
+export function effectiveGuards(e: Effect): Guard[] {
+  return e.protectedBy.filter((g) => !(g.kind === "unique-insert" && g.atomic === false));
+}
+
 export const at = (l: SourceLocation) => `${l.file}:${l.line}`;
 
 /** Two steps commit together only if they run inside the same transaction. */
@@ -73,17 +94,57 @@ export function sameTransaction(a: { transaction?: string }, b: { transaction?: 
 }
 
 /** Code for the safe patterns, referenced by fixes. Kept generic: Prisma for DB, Redis for claims. */
-export const SNIPPETS = {
-  transactionalClaim: `await prisma.$transaction(async (tx) => {
+const TX_CLAIM: Record<string, string> = {
+  prisma: `await prisma.$transaction(async (tx) => {
   // processedEvent.id has a unique constraint: a retry throws here and nothing below commits twice.
   await tx.processedEvent.create({ data: { id: event.id } });
   // ...this handler's writes, using tx...
 });`,
+  drizzle: `await db.transaction(async (tx) => {
+  const [claimed] = await tx.insert(processedEvents).values({ id: event.id }).onConflictDoNothing().returning();
+  if (!claimed) return; // duplicate delivery
+  // ...this handler's writes, using tx...
+});`,
+  knex: `await knex.transaction(async (trx) => {
+  const claimed = await trx("processed_events").insert({ id: event.id }).onConflict("id").ignore().returning("id");
+  if (claimed.length === 0) return; // duplicate delivery
+  // ...this handler's writes, using trx...
+});`,
+  mongoose: `await mongoose.connection.transaction(async (session) => {
+  // _id is unique: a retry throws E11000 here and nothing below commits twice.
+  await ProcessedEvent.create([{ _id: event.id }], { session });
+  // ...this handler's writes, passing { session }...
+});`,
+  dynamo: `await dynamo.send(new TransactWriteItemsCommand({
+  ClientRequestToken: event.id,
+  TransactItems: [
+    { Put: { TableName: "processed", Item: { pk: { S: event.id } }, ConditionExpression: "attribute_not_exists(pk)" } },
+    // ...this handler's writes as further Put/Update items...
+  ],
+}));`,
+  sql: `await client.query("BEGIN");
+const claim = await client.query("INSERT INTO processed_events (id) VALUES ($1) ON CONFLICT DO NOTHING", [event.id]);
+if (claim.rowCount === 0) { await client.query("ROLLBACK"); return; } // duplicate delivery
+// ...this handler's writes on the same client...
+await client.query("COMMIT");`,
+};
+
+/** The transactional-claim pattern written for the library the effect uses. */
+export function transactionalClaim(module: string): string {
+  if (module.startsWith("drizzle-orm")) return TX_CLAIM.drizzle!;
+  if (module === "knex") return TX_CLAIM.knex!;
+  if (module === "mongoose") return TX_CLAIM.mongoose!;
+  if (module.startsWith("@aws-sdk/client-dynamodb") || module === "@aws-sdk/lib-dynamodb") return TX_CLAIM.dynamo!;
+  if (["pg", "mysql2", "mysql2/promise", "@neondatabase/serverless", "@vercel/postgres"].includes(module)) return TX_CLAIM.sql!;
+  return TX_CLAIM.prisma!;
+}
+
+export const SNIPPETS = {
   idempotencyKey: (field: string, id = "event.id") => `await client.call(params, { ${field}: \`evt_\${${id}}\` });`,
   releasableClaim: `const key = \`evt:\${event.id}\`;
 if (!(await redis.set(key, "1", "EX", 60 * 60 * 24 * 7, "NX"))) return ok(); // duplicate
 try {
-  await sendTheEmail();
+  await doTheWork();
 } catch (err) {
   await redis.del(key); // let the retry try again
   throw err;

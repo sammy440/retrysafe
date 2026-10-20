@@ -1,0 +1,57 @@
+{
+  "pack": "queues",
+  "source": "https://docs.bullmq.io/guide/jobs/job-ids",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "bullmq",
+          "bull"
+        ],
+        "callee": "add"
+      },
+      "kind": "enqueue",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 2,
+        "field": "jobId"
+      }
+    },
+    {
+      "match": {
+        "module": [
+          "bullmq",
+          "bull"
+        ],
+        "callee": "addBulk"
+      },
+      "kind": "enqueue",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "inngest",
+        "callee": "send"
+      },
+      "kind": "enqueue",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 0,
+        "field": "id"
+      }
+    },
+    {
+      "match": {
+        "module": "@trigger.dev/sdk",
+        "callee": "trigger"
+      },
+      "kind": "enqueue",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    }
+  ],
+  "verify": []
+}

@@ -1,0 +1,95 @@
+{
+  "pack": "aws",
+  "source": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagededuplicationid-property.html",
+  "commands": {
+    "SendEmailCommand": {
+      "kind": "email",
+      "idempotent": false
+    },
+    "SendRawEmailCommand": {
+      "kind": "email",
+      "idempotent": false
+    },
+    "SendTemplatedEmailCommand": {
+      "kind": "email",
+      "idempotent": false
+    },
+    "SendBulkTemplatedEmailCommand": {
+      "kind": "email",
+      "idempotent": false
+    },
+    "PublishCommand": {
+      "kind": "enqueue",
+      "idempotent": false,
+      "acceptsKey": {
+        "field": "MessageDeduplicationId"
+      }
+    },
+    "SendMessageCommand": {
+      "kind": "enqueue",
+      "idempotent": false,
+      "acceptsKey": {
+        "field": "MessageDeduplicationId"
+      }
+    },
+    "SendMessageBatchCommand": {
+      "kind": "enqueue",
+      "idempotent": false
+    },
+    "PutEventsCommand": {
+      "kind": "enqueue",
+      "idempotent": false
+    },
+    "PutRecordCommand": {
+      "kind": "enqueue",
+      "idempotent": false
+    },
+    "InvokeCommand": {
+      "kind": "http-call",
+      "idempotent": "unknown"
+    },
+    "StartExecutionCommand": {
+      "kind": "enqueue",
+      "idempotent": true,
+      "note": "Step Functions dedupes on execution name"
+    },
+    "PutObjectCommand": {
+      "kind": "file-write",
+      "idempotent": true
+    },
+    "PutItemCommand": {
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "dynamo"
+    },
+    "PutCommand": {
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "dynamo"
+    },
+    "UpdateItemCommand": {
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "dynamo"
+    },
+    "UpdateCommand": {
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "dynamo"
+    },
+    "TransactWriteItemsCommand": {
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "acceptsKey": {
+        "field": "ClientRequestToken"
+      }
+    },
+    "TransactWriteCommand": {
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "acceptsKey": {
+        "field": "ClientRequestToken"
+      }
+    }
+  }
+}

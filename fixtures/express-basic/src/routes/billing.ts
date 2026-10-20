@@ -12,7 +12,7 @@ async function alreadyHandled(eventId: string) {
 // WORK BEFORE RECORD: the lookup stops sequential retries, but a crash before the insert repeats the email.
 router.post("/callback", async (req, res) => {
   const event = req.body;
-  if (await alreadyHandled(event.id)) return res.sendStatus(200);
+  if (await alreadyHandled(event.id)) return res.sendStatus(200); // expect: check-then-insert-race
 
   await sendReceipt(event.data.email, event.data.orderId);
   await prisma.processedEvent.create({ data: { id: event.id } });
@@ -24,7 +24,7 @@ router.post("/refund-webhook", async (req, res) => {
   const order = await prisma.order.findUnique({ where: { id: req.body.orderId } });
   if (!order) return res.sendStatus(404);
 
-  await prisma.order.update({ where: { id: order.id }, data: { refundCount: { increment: 1 } } }); // expect: unguarded-side-effect
+  await prisma.order.update({ where: { id: order.id }, data: { refundCount: { increment: 1 } } }); // expect: incrementing-write-unguarded
   res.sendStatus(200);
 });
 

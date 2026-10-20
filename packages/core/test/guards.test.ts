@@ -96,7 +96,7 @@ describe("guard detection", () => {
   it("classifies increments as non-idempotent and fixed updates as idempotent", () => {
     const inc = `  await prisma.wallet.update({ where: { id: 1 }, data: { balance: { increment: 5 } } });`;
     const set = `  await prisma.wallet.update({ where: { id: 1 }, data: { status: "paid" } });`;
-    expect(rules(run(inc))).toEqual(["unguarded-side-effect"]);
+    expect(rules(run(inc))).toEqual(["incrementing-write-unguarded"]);
     expect(rules(run(set))).toEqual([]);
   });
 });
@@ -122,12 +122,12 @@ describe("ordering and key rules", () => {
 
   it("effect-before-record: lookup, work, then record", () => {
     const body = `  if (await prisma.processedEvent.findUnique({ where: { id: event.id } })) return new Response("dup");\n${EFFECT}\n  await prisma.processedEvent.create({ data: { id: event.id } });`;
-    expect(rules(run(body))).toEqual(["effect-before-record"]);
+    expect(rules(run(body)).sort()).toEqual(["check-then-insert-race", "effect-before-record"]);
   });
 
   it("effect-before-record also sees a Redis GET check with a later SET marker", () => {
     const body = `  if (await redis.get(event.id)) return new Response("dup");\n${EFFECT}\n  await redis.set(event.id, "1");`;
-    expect(rules(run(body))).toEqual(["effect-before-record"]);
+    expect(rules(run(body)).sort()).toEqual(["check-then-insert-race", "effect-before-record"]);
   });
 
   it("nondeterministic-key: Date.now() and uuid() keys, but not event ids", () => {
@@ -146,5 +146,81 @@ describe("ordering and key rules", () => {
   it("effect-missing-idempotency-key: guarded payment without a key", () => {
     const body = `  if (!(await redis.set(event.id, "1", "NX"))) return new Response("dup");\n  await stripe.charges.create({ amount: 1 });`;
     expect(rules(run(body)).sort()).toEqual(["effect-missing-idempotency-key", "record-before-effect-no-tx"]);
+  });
+});
+
+describe("control flow: try/catch, switch, middleware", () => {
+  it("a claim in try whose catch always exits covers the code after the try", () => {
+    const body = `  try {\n    await prisma.processedEvent.create({ data: { id: event.id } });\n  } catch (e: any) {\n    if (e.code === "P2002") return new Response("dup");\n    throw e;\n  }\n${EFFECT}`;
+    expect(unguarded(run(body))).toEqual([]);
+  });
+
+  it("a claim in try whose catch swallows the error does not cover the code after it", () => {
+    const body = `  try {\n    await prisma.processedEvent.create({ data: { id: event.id } });\n  } catch (e) {\n    console.log("duplicate?", e);\n  }\n${EFFECT}`;
+    expect(unguarded(run(body))).toEqual(["unguarded-side-effect"]);
+  });
+
+  it("a guard in one switch case does not cover another case", () => {
+    const body = `  switch (event.type) {\n    case "a":\n      if (!(await redis.set(event.id, "1", "NX"))) return new Response("dup");\n      break;\n    case "b":\n    ${EFFECT}\n      break;\n  }`;
+    expect(unguarded(run(body))).toEqual(["unguarded-side-effect"]);
+  });
+});
+
+describe("middleware guards", () => {
+  function app(src: string) {
+    const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { allowJs: true } });
+    for (const [file, s] of Object.entries(LIBS)) project.createSourceFile(file, s);
+    project.createSourceFile("/server.ts", `import express from "express";\nimport { redis } from "./lib/redis";\nimport { send } from "./lib/mail";\nconst app = express();\n${src}`);
+    return analyze({ project, root: "/", guards: [{ callee: "idempotent", atomic: true }] });
+  }
+  const dedupe = `async function dedupe(req: any, res: any, next: any) {\n  if (!(await redis.set(req.body.id, "1", "NX"))) return res.sendStatus(200);\n  next();\n}`;
+  const route = `app.post("/webhooks/x", async (req, res) => { await send(req.body.email); res.sendStatus(200); });`;
+
+  it("route-level middleware that claims the event guards the handler", () => {
+    expect(unguarded(app(`${dedupe}\napp.post("/webhooks/x", dedupe, async (req, res) => { await send(req.body.email); res.sendStatus(200); });`))).toEqual([]);
+  });
+  it("app.use middleware registered before the route guards it; after the route it does not", () => {
+    expect(unguarded(app(`${dedupe}\napp.use(dedupe);\n${route}`))).toEqual([]);
+    expect(unguarded(app(`${dedupe}\n${route}\napp.use(dedupe);`))).toEqual(["unguarded-side-effect"]);
+  });
+  it("configured guard middleware factories are trusted", () => {
+    expect(unguarded(app(`declare function idempotent(): any;\napp.post("/webhooks/x", idempotent(), async (req, res) => { await send(req.body.email); res.sendStatus(200); });`))).toEqual([]);
+  });
+});
+
+describe("probot", () => {
+  it("discovers app.on handlers and classifies context.octokit calls", () => {
+    const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { allowJs: true } });
+    project.createSourceFile(
+      "/index.ts",
+      `import { Probot } from "probot";\nexport default (app: Probot) => {\n  app.on("issues.opened", async (context) => {\n    await context.octokit.issues.createComment(context.issue({ body: "Thanks!" }));\n  });\n};`,
+    );
+    const r = analyze({ project, root: "/" });
+    expect(r.handlers.map((h) => h.handler.name)).toEqual(["Probot on issues.opened"]);
+    expect(rules(r)).toEqual(["unguarded-side-effect"]);
+  });
+});
+
+describe("low-confidence heuristics", () => {
+  it("order-dependence-assumed: state set from several event types without a timestamp check", () => {
+    const body = `  switch (event.type) {\n    case "subscription.updated":\n      await prisma.subscription.update({ where: { id: event.data.id }, data: { status: "active" } });\n      break;\n    case "subscription.deleted":\n      await prisma.subscription.update({ where: { id: event.data.id }, data: { status: "canceled" } });\n      break;\n  }`;
+    expect(rules(run(body))).toEqual([]);
+    expect(rules(run(body, { minConfidence: "low" }))).toEqual(["order-dependence-assumed"]);
+    const guarded = body.replace(/where: \{ id: event.data.id \}/g, "where: { id: event.data.id, updatedAt: { lt: new Date(event.created * 1000) } }");
+    expect(rules(run(guarded, { minConfidence: "low" }))).toEqual([]);
+  });
+
+  it("wrong-event-field-as-key: data.id keys are only a weak signal (Paystack/Flutterwave have no event id)", () => {
+    const body = `  await prisma.$transaction(async (tx) => {\n    await tx.processedEvent.create({ data: { id: event.data.id } });\n  });`;
+    expect(rules(run(body))).toEqual([]);
+    expect(rules(run(body, { minConfidence: "low" }))).toEqual(["wrong-event-field-as-key"]);
+    const typed = body.replace("event.data.id", "`${event.type}:${event.data.id}`");
+    expect(rules(run(typed, { minConfidence: "low" }))).toEqual([]);
+  });
+
+  it("unresolved calls with effect-like names surface only at low confidence", () => {
+    const body = `}\nexport async function PUT(req: Request, deps: any) {\n  await deps.billing.chargeCustomer("c");`;
+    expect(rules(run(body))).toEqual([]);
+    expect(rules(run(body, { minConfidence: "low" }))).toEqual(["unguarded-side-effect"]);
   });
 });

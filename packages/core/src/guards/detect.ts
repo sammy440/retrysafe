@@ -1,6 +1,8 @@
 import { Node, SyntaxKind } from "ts-morph";
+import { builderFamily, classifyBuilder, isOutermostCall } from "../effects/builders";
 import { DEDUPE_NAME, PRISMA_MODULE, REDIS_MODULES, SQL_MODULES } from "../effects/catalog";
 import { classifySql, insertTable } from "../effects/classify";
+import { evalNumber } from "../analysis/http";
 import { calleeOf, isFunctionLike, textOf, unwrap, type CallLike, type CallTarget } from "../project/resolve";
 import type { GuardKind } from "../types";
 
@@ -17,6 +19,41 @@ export interface GuardPrimitive {
   duplicateWhen: "truthy" | "falsy" | "unknown";
   /** Expressions the dedupe key is built from, for key-source tracking. */
   keyNodes?: Node[];
+  /** Table/model the guard reads or writes, and the columns it sets or filters on (for schema checks). */
+  table?: string;
+  columns?: string[];
+  ttlSeconds?: number;
+}
+
+/** Expiry set on a Redis write: SET k v EX n / PX n / { EX: n } / { ex: n }, or SETEX k n v. */
+export function redisTtl(method: string, args: Node[]): number | undefined {
+  if (method.toLowerCase() === "setex") return evalNumber(args[1]);
+  for (let i = 2; i < args.length; i++) {
+    const a = unwrap(args[i]!);
+    if (Node.isStringLiteral(a)) {
+      const flag = a.getLiteralValue().toUpperCase();
+      if (flag === "EX") return evalNumber(args[i + 1]);
+      if (flag === "PX") return (evalNumber(args[i + 1]) ?? Number.NaN) / 1000 || undefined;
+    }
+    if (Node.isObjectLiteralExpression(a)) {
+      for (const p of a.getProperties()) {
+        if (!Node.isPropertyAssignment(p)) continue;
+        const name = p.getName().toUpperCase();
+        if (name === "EX") return evalNumber(p.getInitializer());
+        if (name === "PX") return (evalNumber(p.getInitializer()) ?? Number.NaN) / 1000 || undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Property names of an object literal (data, where, values, documents). */
+export function objectKeys(node: Node | undefined): string[] | undefined {
+  const o = node && unwrap(node);
+  if (!o) return undefined;
+  if (Node.isArrayLiteralExpression(o)) return objectKeys(o.getElements()[0]);
+  if (!Node.isObjectLiteralExpression(o)) return undefined;
+  return o.getProperties().flatMap((p) => (Node.isPropertyAssignment(p) || Node.isShorthandPropertyAssignment(p) ? [p.getName().replace(/^["'`]|["'`]$/g, "")] : []));
 }
 
 export interface CustomGuard {
@@ -106,9 +143,16 @@ export function guardPrimitive(call: CallLike, target: CallTarget, custom: Custo
   const method = chain[chain.length - 1] ?? "";
   const args = argsOf(call);
 
+  const family = builderFamily(module);
+  if (family) {
+    if (!isOutermostCall(call)) return undefined;
+    const b = classifyBuilder(family, call);
+    return b.type === "guard" ? b.guard : undefined;
+  }
+
   if (REDIS_MODULES.includes(module)) {
     if ((method === "set" && hasNxOption(args)) || method.toLowerCase() === "setnx") {
-      return { kind: "redis-setnx", atomic: true, description: "Redis SET NX", selfGuarding: false, duplicateWhen: "falsy", keyNodes: args.slice(0, 1) };
+      return { kind: "redis-setnx", atomic: true, description: "Redis SET NX", selfGuarding: false, duplicateWhen: "falsy", keyNodes: args.slice(0, 1), ttlSeconds: redisTtl(method, args) };
     }
     if (method === "get" || method === "exists") {
       return { kind: "lookup-then-insert", atomic: false, description: `Redis ${method.toUpperCase()} lookup`, selfGuarding: false, duplicateWhen: "truthy", keyNodes: args.slice(0, 1) };
@@ -126,6 +170,8 @@ export function guardPrimitive(call: CallLike, target: CallTarget, custom: Custo
         selfGuarding: false,
         duplicateWhen: "truthy",
         keyNodes: keyFields(objectProp(args[0], "where")),
+        table: model,
+        columns: objectKeys(objectProp(args[0], "where")),
       };
     }
     if ((method === "create" || method === "createMany") && DEDUPE_NAME.test(model)) {
@@ -137,6 +183,8 @@ export function guardPrimitive(call: CallLike, target: CallTarget, custom: Custo
         selfGuarding: method === "create" && !skipDuplicates,
         duplicateWhen: "falsy",
         keyNodes: keyFields(objectProp(args[0], "data")),
+        table: model,
+        columns: objectKeys(objectProp(args[0], "data")),
       };
     }
     if (method === "$executeRaw" || method === "$executeRawUnsafe" || method === "$queryRaw") {
@@ -156,7 +204,8 @@ function sqlGuard(sql: string | undefined, paramsArg: Node | undefined): GuardPr
   const c = classifySql(sql);
   const params = sqlKeyParams(sql, paramsArg);
   if (!c.isEffect) {
-    return { kind: "lookup-then-insert", atomic: false, description: "SELECT lookup", selfGuarding: false, duplicateWhen: "truthy", keyNodes: params };
+    const from = sql.match(/\bfrom\s+["`]?([\w.]+)/i)?.[1];
+    return { kind: "lookup-then-insert", atomic: false, description: `SELECT lookup${from ? ` on ${from}` : ""}`, selfGuarding: false, duplicateWhen: "truthy", keyNodes: params, table: from };
   }
   const table = insertTable(sql);
   if (table && DEDUPE_NAME.test(table)) {
@@ -169,6 +218,8 @@ function sqlGuard(sql: string | undefined, paramsArg: Node | undefined): GuardPr
       selfGuarding: !ignoresConflict,
       duplicateWhen: "falsy",
       keyNodes: params,
+      table,
+      columns: sql.match(/\binsert\s+(?:ignore\s+)?into\s+[\w."`]+\s*\(([^)]*)\)/i)?.[1]?.split(",").map((c) => c.trim().replace(/["`]/g, "")),
     };
   }
   return undefined;

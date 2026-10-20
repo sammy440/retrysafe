@@ -14,7 +14,7 @@ new Worker("invoices", async (job) => {
   // OK: the email carries an idempotency key derived from the job.
   await resend.emails.send({ to: job.data.email, subject: "Invoice", html: "..." }, { idempotencyKey: `invoice-email/${job.id}` });
 
-  await emailQueue.add("followup", { email: job.data.email }); // expect: unguarded-side-effect
+  await emailQueue.add("followup", { email: job.data.email }); // expect: queue-add-without-job-id
   await emailQueue.add("receipt", { email: job.data.email }, { jobId: `receipt-${job.id}` });
 });
 

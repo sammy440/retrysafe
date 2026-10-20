@@ -1,16 +1,33 @@
+import aws from "../../catalog/aws.json";
+import email from "../../catalog/email.json";
+import flutterwave from "../../catalog/flutterwave.json";
+import github from "../../catalog/github.json";
+import http from "../../catalog/http.json";
+import messaging from "../../catalog/messaging.json";
+import paystack from "../../catalog/paystack.json";
+import prisma from "../../catalog/prisma.json";
+import providers from "../../catalog/providers.json";
+import queues from "../../catalog/queues.json";
+import redis from "../../catalog/redis.json";
+import shopify from "../../catalog/shopify.json";
+import sql from "../../catalog/sql.json";
+import stripe from "../../catalog/stripe.json";
 import type { EffectKind, KeySpec } from "../types";
 
 /**
  * How to decide idempotency beyond a fixed value:
  * - "prisma-write": inspect `data` for increment/decrement/push, `skipDuplicates`
  * - "sql": inspect the SQL text (INSERT without ON CONFLICT, `x = x + 1`, ...)
+ * - "graphql": mutation vs query, and Shopify's @idempotent directive
+ * - "http": method, URL host (providers.json), and idempotency headers or body keys
+ * - "dynamo": conditional puts and relative update expressions
  */
-export type Classifier = "prisma-write" | "sql";
+export type Classifier = "prisma-write" | "sql" | "graphql" | "http" | "dynamo";
 
 export interface EffectCatalogEntry {
   match: {
     module: string | string[];
-    /** Dot-separated member chain matched against the end of the call's chain. `*` matches one segment. */
+    /** Dot-separated member chain matched against the end of the call's chain. `*` matches one segment; `()` matches calling the module itself. */
     callee: string;
   };
   kind: EffectKind;
@@ -26,100 +43,52 @@ export interface VerifyCatalogEntry {
   provider?: string;
 }
 
-const STRIPE_KEY: KeySpec = { arg: 1, field: "idempotencyKey" };
-const STRIPE_SRC = "https://docs.stripe.com/api/idempotent_requests";
+/** One provider or library pack, as stored in catalog/*.json. */
+export interface Pack {
+  pack: string;
+  source: string;
+  notes?: string;
+  effects: EffectCatalogEntry[];
+  verify: VerifyCatalogEntry[];
+}
 
-const stripe = (callee: string): EffectCatalogEntry => ({
-  match: { module: "stripe", callee },
-  kind: "payment",
-  idempotent: false,
-  acceptsKey: STRIPE_KEY,
-  source: STRIPE_SRC,
-});
+export interface AwsCommandFact {
+  kind: EffectKind;
+  idempotent: boolean | "unknown";
+  acceptsKey?: { field: string };
+  classify?: Classifier;
+  note?: string;
+}
 
-const PRISMA = "@prisma/client";
-const SQL_CLIENTS = ["pg", "mysql2", "mysql2/promise"];
-const REDIS = ["ioredis", "redis", "@upstash/redis"];
+export interface ProviderFact {
+  name: string;
+  retryWindowHours?: number;
+  source?: string;
+  notes?: string;
+  dedupeKey?: string;
+}
 
-export const EFFECT_CATALOG: EffectCatalogEntry[] = [
-  // Payments
-  stripe("paymentIntents.create"),
-  stripe("paymentIntents.confirm"),
-  stripe("paymentIntents.capture"),
-  stripe("charges.create"),
-  stripe("refunds.create"),
-  stripe("transfers.create"),
-  stripe("payouts.create"),
-  stripe("customers.create"),
-  stripe("subscriptions.create"),
-  stripe("invoices.create"),
-  stripe("invoices.pay"),
-  stripe("invoiceItems.create"),
+export interface HostFact {
+  kind: EffectKind;
+  idempotencyHeader?: string;
+  bodyKey?: string;
+}
 
-  // Databases
-  { match: { module: PRISMA, callee: "*.create" }, kind: "db-write", idempotent: false, classify: "prisma-write" },
-  { match: { module: PRISMA, callee: "*.createMany" }, kind: "db-write", idempotent: false, classify: "prisma-write" },
-  { match: { module: PRISMA, callee: "*.upsert" }, kind: "db-write", idempotent: true, classify: "prisma-write" },
-  { match: { module: PRISMA, callee: "*.update" }, kind: "db-write", idempotent: true, classify: "prisma-write" },
-  { match: { module: PRISMA, callee: "*.updateMany" }, kind: "db-write", idempotent: true, classify: "prisma-write" },
-  { match: { module: PRISMA, callee: "*.delete" }, kind: "db-write", idempotent: true },
-  { match: { module: PRISMA, callee: "*.deleteMany" }, kind: "db-write", idempotent: true },
-  { match: { module: PRISMA, callee: "$executeRaw" }, kind: "db-write", idempotent: "unknown", classify: "sql" },
-  { match: { module: PRISMA, callee: "$executeRawUnsafe" }, kind: "db-write", idempotent: "unknown", classify: "sql" },
-  { match: { module: SQL_CLIENTS, callee: "query" }, kind: "db-write", idempotent: "unknown", classify: "sql" },
-  { match: { module: SQL_CLIENTS, callee: "execute" }, kind: "db-write", idempotent: "unknown", classify: "sql" },
-  { match: { module: REDIS, callee: "incr" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "incrby" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "incrbyfloat" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "hincrby" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "lpush" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "rpush" }, kind: "db-write", idempotent: false },
-  { match: { module: REDIS, callee: "xadd" }, kind: "db-write", idempotent: false },
+export const PACKS = [stripe, paystack, flutterwave, prisma, sql, redis, email, messaging, queues, github, shopify, http] as Pack[];
 
-  // Email and SMS
-  { match: { module: "nodemailer", callee: "sendMail" }, kind: "email", idempotent: false },
-  {
-    match: { module: "resend", callee: "emails.send" },
-    kind: "email",
-    idempotent: false,
-    acceptsKey: { arg: 1, field: "idempotencyKey" },
-    source: "https://resend.com/docs/dashboard/emails/idempotency-keys",
-  },
-  { match: { module: "@sendgrid/mail", callee: "send" }, kind: "email", idempotent: false },
-  { match: { module: "@sendgrid/mail", callee: "sendMultiple" }, kind: "email", idempotent: false },
-  { match: { module: "postmark", callee: "sendEmail" }, kind: "email", idempotent: false },
-  { match: { module: "twilio", callee: "messages.create" }, kind: "sms", idempotent: false },
+export const EFFECT_CATALOG: EffectCatalogEntry[] = PACKS.flatMap((p) => p.effects.map((e) => ({ source: p.source, ...e })));
+export const VERIFY_CATALOG: VerifyCatalogEntry[] = PACKS.flatMap((p) => p.verify);
+export const AWS_COMMANDS = aws.commands as Record<string, AwsCommandFact>;
 
-  // Queues
-  {
-    match: { module: ["bullmq", "bull"], callee: "add" },
-    kind: "enqueue",
-    idempotent: false,
-    acceptsKey: { arg: 2, field: "jobId" },
-    source: "https://docs.bullmq.io/guide/jobs/job-ids",
-  },
-
-  // Outbound HTTP: repeatable or not depends on the remote side.
-  { match: { module: "axios", callee: "post" }, kind: "http-call", idempotent: "unknown" },
-  { match: { module: "axios", callee: "patch" }, kind: "http-call", idempotent: "unknown" },
-];
-
-export const VERIFY_CATALOG: VerifyCatalogEntry[] = [
-  { match: { module: "stripe", callee: "webhooks.constructEvent" }, provider: "stripe" },
-  { match: { module: "stripe", callee: "webhooks.constructEventAsync" }, provider: "stripe" },
-  { match: { module: "svix", callee: "verify" } },
-  { match: { module: "standardwebhooks", callee: "verify" } },
-  { match: { module: "@octokit/webhooks", callee: "verify" }, provider: "github" },
-  { match: { module: "@octokit/webhooks", callee: "verifyAndReceive" }, provider: "github" },
-  { match: { module: "@shopify/shopify-api", callee: "webhooks.validate" }, provider: "shopify" },
-  { match: { module: "crypto", callee: "createHmac" } },
-  { match: { module: "crypto", callee: "timingSafeEqual" } },
-];
+const { hosts, ...providerFacts } = providers;
+export const PROVIDERS = providerFacts as Record<string, ProviderFact>;
+export const HTTP_HOSTS = hosts as Record<string, HostFact>;
 
 /** Models and tables whose names suggest they record processed events. */
 export const DEDUPE_NAME = /processed|dedup|idempot|webhook_?events?|inbox|seen_?events?/i;
 
 export function chainMatches(pattern: string, chain: string[]): boolean {
+  if (pattern === "()") return chain.length === 0;
   const parts = pattern.split(".");
   if (chain.length < parts.length) return false;
   const tail = chain.slice(chain.length - parts.length);
@@ -138,6 +107,6 @@ export function findEntry<T extends { match: { module: string | string[]; callee
   return catalog.find((e) => moduleMatches(e.match.module, module) && chainMatches(e.match.callee, chain));
 }
 
-export const REDIS_MODULES = REDIS;
-export const SQL_MODULES = SQL_CLIENTS;
-export const PRISMA_MODULE = PRISMA;
+export const REDIS_MODULES = (redis as Pack).effects[0]!.match.module as string[];
+export const SQL_MODULES = (sql as Pack).effects[0]!.match.module as string[];
+export const PRISMA_MODULE = "@prisma/client";

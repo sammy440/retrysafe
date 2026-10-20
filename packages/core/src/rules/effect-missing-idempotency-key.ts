@@ -1,5 +1,5 @@
-import type { Finding, HandlerReport } from "../types";
-import { SNIPPETS, findingId, stableId, type Rule } from "./shared";
+import type { HandlerReport } from "../types";
+import { SNIPPETS, stableId, type Rule, type RuleFinding } from "./shared";
 
 const KINDS = new Set(["payment", "email", "sms"]);
 
@@ -11,13 +11,17 @@ const KINDS = new Set(["payment", "email", "sms"]);
 export const effectMissingIdempotencyKey: Rule = {
   id: "effect-missing-idempotency-key",
   severity: "warning",
-  run(report: HandlerReport): Finding[] {
-    const out: Finding[] = [];
+  docs: {
+    summary: "A call whose SDK supports an idempotency key is made without one.",
+    why: "Guards can still let a repeat through (record rolled back with the transaction, lease expired, non-atomic check). Without a key the provider performs the effect again.",
+    safePattern: "Pass the SDK's idempotency key option, derived from the event or job id.",
+  },
+  run(report: HandlerReport): RuleFinding[] {
+    const out: RuleFinding[] = [];
     for (const e of report.effects) {
       const spec = e.acceptsIdempotencyKey;
       if (!spec || e.hasIdempotencyKey || !KINDS.has(e.kind) || e.protectedBy.length === 0) continue;
       out.push({
-        id: findingId(this.id, report.handler.id, e.location),
         rule: this.id,
         severity: this.severity,
         confidence: "medium",

@@ -1,0 +1,190 @@
+{
+  "pack": "stripe",
+  "source": "https://docs.stripe.com/api/idempotent_requests",
+  "effects": [
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "paymentIntents.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "paymentIntents.confirm"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "paymentIntents.capture"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "charges.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "refunds.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "transfers.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "payouts.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "customers.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "subscriptions.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "invoices.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "invoices.pay"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "invoiceItems.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "checkout.sessions.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "customers.createBalanceTransaction"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 1,
+        "field": "idempotencyKey"
+      }
+    }
+  ],
+  "verify": [
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "webhooks.constructEvent"
+      },
+      "provider": "stripe"
+    },
+    {
+      "match": {
+        "module": "stripe",
+        "callee": "webhooks.constructEventAsync"
+      },
+      "provider": "stripe"
+    }
+  ]
+}

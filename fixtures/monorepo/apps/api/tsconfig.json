@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": { "@acme/db": ["../../packages/db/src/index.ts"], "~/*": ["./src/*"] }
+  },
+  "include": ["src"]
+}

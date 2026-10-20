@@ -1,0 +1,95 @@
+{
+  "pack": "prisma",
+  "source": "https://www.prisma.io/docs/orm/reference/prisma-client-reference",
+  "effects": [
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.create"
+      },
+      "kind": "db-write",
+      "idempotent": false,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.createMany"
+      },
+      "kind": "db-write",
+      "idempotent": false,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.createManyAndReturn"
+      },
+      "kind": "db-write",
+      "idempotent": false,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.upsert"
+      },
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.update"
+      },
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.updateMany"
+      },
+      "kind": "db-write",
+      "idempotent": true,
+      "classify": "prisma-write"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.delete"
+      },
+      "kind": "db-write",
+      "idempotent": true
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "*.deleteMany"
+      },
+      "kind": "db-write",
+      "idempotent": true
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "$executeRaw"
+      },
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "classify": "sql"
+    },
+    {
+      "match": {
+        "module": "@prisma/client",
+        "callee": "$executeRawUnsafe"
+      },
+      "kind": "db-write",
+      "idempotent": "unknown",
+      "classify": "sql"
+    }
+  ],
+  "verify": []
+}

@@ -1,5 +1,5 @@
-import type { Finding, HandlerReport } from "../types";
-import { SNIPPETS, at, consequence, deliveryNarrative, findingId, sameTransaction, stableId, type Rule } from "./shared";
+import type { HandlerReport } from "../types";
+import { SNIPPETS, effectiveGuards, transactionalClaim, at, consequence, deliveryNarrative, sameTransaction, stableId, type Rule, type RuleFinding } from "./shared";
 
 /**
  * The handler checks "seen before?", does the work, and records the event only afterwards.
@@ -8,17 +8,22 @@ import { SNIPPETS, at, consequence, deliveryNarrative, findingId, sameTransactio
 export const effectBeforeRecord: Rule = {
   id: "effect-before-record",
   severity: "warning",
-  run(report: HandlerReport): Finding[] {
-    const out: Finding[] = [];
+  docs: {
+    summary: "An effect runs before the event is recorded, behind a check that is not an atomic claim.",
+    why: "If the process dies between the effect and the record, the retry finds no record, passes the check, and repeats the effect.",
+    safePattern: "Record and write in one transaction for DB effects; for external calls use an idempotency key or an outbox written in the same transaction as the record.",
+  },
+  run(report: HandlerReport): RuleFinding[] {
+    const out: RuleFinding[] = [];
     for (const e of report.effects) {
       if (e.idempotent !== false || e.hasIdempotencyKey || e.kind === "unknown") continue;
       // Unguarded effects are reported by unguarded-side-effect; effects behind an atomic claim are recorded before they run.
-      if (e.protectedBy.length === 0 || e.protectedBy.some((g) => g.kind !== "lookup-then-insert")) continue;
+      const guards = effectiveGuards(e);
+      if (guards.length === 0 || guards.some((g) => g.kind !== "lookup-then-insert")) continue;
       const record = report.records.find((r) => r.order > e.order && !sameTransaction(r, e));
       if (!record) continue;
       const story = deliveryNarrative(report.handler);
       out.push({
-        id: findingId(this.id, report.handler.id, e.location),
         rule: this.id,
         severity: this.severity,
         confidence: "medium",
@@ -40,7 +45,7 @@ export const effectBeforeRecord: Rule = {
               : "Claim the event atomically before the effect, or write an outbox row in the same transaction as the record and send from a worker that deduplicates.",
         snippet:
           e.kind === "db-write"
-            ? SNIPPETS.transactionalClaim
+            ? transactionalClaim(e.module)
             : e.acceptsIdempotencyKey
               ? SNIPPETS.idempotencyKey(e.acceptsIdempotencyKey.field, stableId(report.handler))
               : SNIPPETS.releasableClaim,

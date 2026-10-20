@@ -20,6 +20,7 @@ export type CallTarget =
 export type CallLike = Node & { getKind(): SyntaxKind };
 
 const TRANSACTION_METHODS = new Set(["$transaction", "transaction"]);
+const GLOBAL_MODULES = new Set(["fetch"]);
 
 export function isFunctionLike(node: Node | undefined): node is FunctionLike {
   return (
@@ -154,11 +155,23 @@ function moduleOfDeclaration(decl: Node, seen: Set<Node>): { module: string; via
         return { module: outer.module, viaTransaction: !!last && TRANSACTION_METHODS.has(last) };
       }
     }
-    return undefined;
+    // A typed parameter takes the module its type is imported from: (fastify: FastifyInstance) -> fastify.
+    return typeModule(decl.getTypeNode());
   }
   if (Node.isPropertyDeclaration(decl) || Node.isPropertyAssignment(decl)) {
     const init = decl.getInitializer();
     return init ? moduleOf(init, seen) : undefined;
+  }
+  return undefined;
+}
+
+/** Module a type annotation's name is imported from (`FastifyInstance`, `SQSEvent`, `Prisma.TransactionClient`). */
+export function typeModule(typeNode: Node | undefined): { module: string; viaTransaction: boolean } | undefined {
+  if (!typeNode || !Node.isTypeReference(typeNode)) return undefined;
+  let name: Node = typeNode.getTypeName();
+  while (Node.isQualifiedName(name)) name = name.getLeft();
+  for (const r of resolveIdentifier(name)) {
+    if ("module" in r) return { module: r.module, viaTransaction: /Transaction/.test(typeNode.getText()) };
   }
   return undefined;
 }
@@ -171,6 +184,12 @@ export function functionFromDeclaration(decl: Node): FunctionLike | undefined {
       const u = unwrap(init);
       if (isFunctionLike(u)) return u;
     }
+  }
+  // CommonJS: `exports.handler = async () => {}` / `module.exports.handler = ...`
+  const assignment = Node.isBinaryExpression(decl) ? decl : decl.getParent();
+  if (assignment && Node.isBinaryExpression(assignment) && assignment.getOperatorToken().getText() === "=") {
+    const right = unwrap(assignment.getRight());
+    if (isFunctionLike(right)) return right;
   }
   if (Node.isExportAssignment(decl)) {
     const u = unwrap(decl.getExpression());
@@ -225,6 +244,11 @@ export function resolveCall(call: CallLike): CallTarget {
 
   const m = moduleOf(root);
   if (m) return { kind: "external", module: m.module, chain, viaTransaction: m.viaTransaction };
+  // Globals declared only in lib .d.ts files (fetch) count as a module of their own.
+  if (Node.isIdentifier(root) && GLOBAL_MODULES.has(root.getText())) {
+    const decls = root.getSymbol()?.getDeclarations() ?? [];
+    if (decls.every((d) => d.getSourceFile().isDeclarationFile())) return { kind: "external", module: `global:${root.getText()}`, chain, viaTransaction: false };
+  }
   return { kind: "unresolved", name };
 }
 
@@ -234,6 +258,8 @@ export function textOf(node: Node | undefined): string | undefined {
   const n = unwrap(node);
   if (Node.isStringLiteral(n) || Node.isNoSubstitutionTemplateLiteral(n)) return n.getLiteralValue();
   if (Node.isTemplateExpression(n)) return n.getText().slice(1, -1);
+  // gql`...`, sql`...`, graphql`...`
+  if (Node.isTaggedTemplateExpression(n)) return n.getTemplate().getText().slice(1, -1);
   if (Node.isIdentifier(n)) {
     for (const r of resolveIdentifier(n)) {
       if ("decl" in r && Node.isVariableDeclaration(r.decl)) return textOf(r.decl.getInitializer());

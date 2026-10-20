@@ -1,7 +1,14 @@
-import type { Effect, Finding, Handler, HandlerReport } from "../types";
-import { SNIPPETS, consequence, deliveryNarrative, findingId, stableId, type Rule } from "./shared";
+import type { Effect, Handler, HandlerReport } from "../types";
+import { isRelativeWrite } from "./incrementing-write-unguarded";
+import { SNIPPETS, effectiveGuards, transactionalClaim, consequence, deliveryNarrative, stableId, type Rule, type RuleFinding } from "./shared";
 
 function fix(e: Effect, h: Handler): string {
+  if (e.module.includes("shopify") && e.note?.startsWith("mutation")) {
+    return `Add Shopify's @idempotent(key: ...) directive to the mutation, with a key derived from ${stableId(h)}, if the mutation supports it; otherwise claim the event atomically before calling it.`;
+  }
+  if (e.acceptsIdempotencyKey?.field === "MessageDeduplicationId") {
+    return `Send to a FIFO queue with MessageDeduplicationId derived from ${stableId(h)} (standard queues ignore it), or claim the event atomically before enqueuing.`;
+  }
   if (e.acceptsIdempotencyKey) {
     return (
       `Pass \`${e.acceptsIdempotencyKey.field}\` derived from ${stableId(h)} (argument ${e.acceptsIdempotencyKey.arg + 1}), ` +
@@ -28,22 +35,32 @@ function fix(e: Effect, h: Handler): string {
 export const unguardedSideEffect: Rule = {
   id: "unguarded-side-effect",
   severity: "error",
-  run(report: HandlerReport): Finding[] {
-    const out: Finding[] = [];
+  docs: {
+    summary: "A non-idempotent effect (payment, email, plain insert, increment) runs with no dedupe guard on its path.",
+    why: "Webhook providers and queues deliver at least once. A timeout, deploy, or manual resend runs the handler again with the same event, and every unguarded effect happens again.",
+    safePattern: "Claim the event atomically before the effect (unique insert in the same transaction as DB writes, or Redis SET NX), or pass the provider's idempotency key derived from the event id.",
+  },
+  run(report: HandlerReport): RuleFinding[] {
+    const out: RuleFinding[] = [];
     for (const e of report.effects) {
-      if (e.idempotent !== false || e.hasIdempotencyKey || e.protectedBy.length > 0) continue;
+      // Unresolved calls with effect-like names are reported too, but only at low confidence.
+      const unresolved = e.kind === "unknown" && e.module === "(unresolved)";
+      if ((e.idempotent !== false && !unresolved) || e.hasIdempotencyKey || effectiveGuards(e).length > 0) continue;
+      // Reported by their own rules: incrementing-write-unguarded, queue-add-without-job-id.
+      if (isRelativeWrite(e) || (e.kind === "enqueue" && e.acceptsIdempotencyKey)) continue;
+      const hollow = e.protectedBy.find((g) => g.kind === "unique-insert" && g.atomic === false);
+      const hollowNote = hollow ? `; ${hollow.description} has no unique constraint${hollow.schemaSource ? ` in ${hollow.schemaSource}` : ""}, so it does not stop duplicates` : "";
       const story = deliveryNarrative(report.handler);
       const via = e.path.length ? ` (via ${e.path.map((p) => `${p.file}:${p.line}`).join(" → ")})` : "";
       out.push({
-        id: findingId(this.id, report.handler.id, e.location),
         rule: this.id,
         severity: this.severity,
         // Deep call chains are more likely to hide a guard we did not model.
-        confidence: e.path.length <= 1 ? "high" : "medium",
+        confidence: unresolved ? "low" : e.path.length <= 1 ? "high" : "medium",
         handler: report.handler.id,
         location: e.location,
         effect: e,
-        message: `${e.kind} \`${e.callee}\`${e.note ? ` (${e.note})` : ""} has no guard on this path${via}`,
+        message: `${e.kind} \`${e.callee}\`${e.note ? ` (${e.note})` : ""} has no guard on this path${via}${hollowNote}`,
         failingSequence: [
           `${story.first}; handler runs ${e.callee}`,
           story.retry,
@@ -53,7 +70,7 @@ export const unguardedSideEffect: Rule = {
         snippet: e.acceptsIdempotencyKey
           ? SNIPPETS.idempotencyKey(e.acceptsIdempotencyKey.field, stableId(report.handler))
           : e.kind === "db-write"
-            ? SNIPPETS.transactionalClaim
+            ? transactionalClaim(e.module)
             : SNIPPETS.releasableClaim,
       });
     }

@@ -1,0 +1,127 @@
+{
+  "pack": "redis",
+  "source": "https://redis.io/docs/latest/commands/set/",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "incr"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "incrby"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "incrbyfloat"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "hincrby"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "hincrbyfloat"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "zincrby"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "lpush"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "rpush"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "xadd"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "ioredis",
+          "redis",
+          "@upstash/redis"
+        ],
+        "callee": "publish"
+      },
+      "kind": "db-write",
+      "idempotent": false
+    }
+  ],
+  "verify": []
+}

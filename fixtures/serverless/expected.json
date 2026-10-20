@@ -1,0 +1,1 @@
+{ "handlers": ["Lambda src/orders.ts#handler (SQS)", "Lambda src/legacy.js#handler (event source (Records batch))", "SQS consumer src/consumer.ts:6 (handleMessage)"] }

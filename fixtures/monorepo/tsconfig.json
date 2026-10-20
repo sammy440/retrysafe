@@ -1,0 +1,5 @@
+{
+  // Solution-style root: no files of its own.
+  "files": [],
+  "references": [{ "path": "./apps/api" }, { "path": "./packages/db" }],
+}

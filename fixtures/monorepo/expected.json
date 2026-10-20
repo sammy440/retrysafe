@@ -1,0 +1,3 @@
+{
+  "handlers": ["POST /hooks/payments", "Worker queue \"digests\""]
+}

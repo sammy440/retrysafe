@@ -1,0 +1,48 @@
+{
+  "pack": "flutterwave",
+  "source": "https://developer.flutterwave.com/docs/making-payments/transfers/overview",
+  "notes": "Flutterwave documents `reference` as a transfer identifier but not how a reused reference is handled, so it is not treated as an idempotency key.",
+  "effects": [
+    {
+      "match": {
+        "module": "flutterwave-node-v3",
+        "callee": "Transfer.initiate"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "flutterwave-node-v3",
+        "callee": "Transfer.bulk"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "flutterwave-node-v3",
+        "callee": "Charge.card"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "flutterwave-node-v3",
+        "callee": "Tokenized.charge"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": "flutterwave-node-v3",
+        "callee": "Transaction.refund"
+      },
+      "kind": "payment",
+      "idempotent": false
+    }
+  ],
+  "verify": []
+}

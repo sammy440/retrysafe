@@ -1,4 +1,4 @@
-import { Node } from "ts-morph";
+import { Node, SyntaxKind } from "ts-morph";
 import { calleeOf, flatten, moduleOf, resolveIdentifier, unwrap } from "../project/resolve";
 import type { KeySource, SourceLocation } from "../types";
 
@@ -45,6 +45,36 @@ function importedName(id: Node): string | undefined {
   return undefined;
 }
 
+/** Property path with local aliases expanded: `session.id` where `session = event.data.object` -> `event.data.object.id`. */
+export function expandPath(node: Node, depth = 0): string {
+  const n = unwrap(node);
+  if (depth > 8) return n.getText();
+  if (Node.isPropertyAccessExpression(n)) return `${expandPath(n.getExpression(), depth + 1)}.${n.getName()}`;
+  if (Node.isElementAccessExpression(n)) {
+    const arg = n.getArgumentExpression();
+    const key = arg && (Node.isStringLiteral(arg) ? arg.getLiteralValue() : undefined);
+    return key ? `${expandPath(n.getExpression(), depth + 1)}.${key}` : n.getText();
+  }
+  if (Node.isIdentifier(n)) {
+    for (const r of resolveIdentifier(n)) {
+      if (!("decl" in r)) continue;
+      if (Node.isVariableDeclaration(r.decl)) {
+        const init = r.decl.getInitializer();
+        const u = init && unwrap(init);
+        if (u && (Node.isPropertyAccessExpression(u) || Node.isIdentifier(u) || Node.isElementAccessExpression(u))) return expandPath(u, depth + 1);
+      }
+      if (Node.isBindingElement(r.decl)) {
+        // const { object } = event.data
+        const varDecl = r.decl.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+        const init = varDecl?.getInitializer();
+        const prop = r.decl.getPropertyNameNode()?.getText() ?? r.decl.getName();
+        if (init) return `${expandPath(init, depth + 1)}.${prop}`;
+      }
+    }
+  }
+  return n.getText();
+}
+
 /**
  * Trace where a key value comes from: event/job fields, constants, parameters, or values that differ
  * on every run (Date.now(), uuid(), ...). Follows local variables and template/concatenation parts.
@@ -67,7 +97,9 @@ export function traceKey(node: Node | undefined, loc: (n: Node) => SourceLocatio
   if (Node.isObjectLiteralExpression(n)) {
     return n.getProperties().flatMap((p) => (Node.isPropertyAssignment(p) ? next(p.getInitializer()) : Node.isShorthandPropertyAssignment(p) ? next(p.getNameNode()) : []));
   }
-  if (Node.isPropertyAccessExpression(n) || Node.isElementAccessExpression(n)) return here("event-field");
+  if (Node.isPropertyAccessExpression(n) || Node.isElementAccessExpression(n)) {
+    return [{ kind: "event-field", text: n.getText(), expanded: expandPath(n), location: loc(n) }];
+  }
   if (Node.isCallExpression(n)) {
     // String(x), x.toString(), hash(x), JSON.stringify(x): the key comes from the inputs.
     const callee = calleeOf(n);

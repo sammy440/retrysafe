@@ -1,0 +1,58 @@
+{
+  "pack": "shopify",
+  "source": "https://shopify.dev/docs/api/usage/implementing-idempotency",
+  "notes": "GraphQL mutations are classified from the query text; the @idempotent(key:) directive makes a supported mutation idempotent (keys retained 24h).",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "@shopify/shopify-api",
+          "@shopify/admin-api-client",
+          "@shopify/shopify-app-remix",
+          "@shopify/shopify-app-express"
+        ],
+        "callee": "request"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "graphql"
+    },
+    {
+      "match": {
+        "module": [
+          "@shopify/shopify-api",
+          "@shopify/admin-api-client",
+          "@shopify/shopify-app-remix",
+          "@shopify/shopify-app-express"
+        ],
+        "callee": "graphql"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "graphql"
+    },
+    {
+      "match": {
+        "module": [
+          "@shopify/shopify-api",
+          "@shopify/admin-api-client",
+          "@shopify/shopify-app-remix",
+          "@shopify/shopify-app-express"
+        ],
+        "callee": "query"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "graphql"
+    }
+  ],
+  "verify": [
+    {
+      "match": {
+        "module": "@shopify/shopify-api",
+        "callee": "webhooks.validate"
+      },
+      "provider": "shopify"
+    }
+  ]
+}

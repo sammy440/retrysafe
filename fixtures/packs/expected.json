@@ -1,0 +1,11 @@
+{
+  "handlers": [
+    "POST /webhooks/drizzle",
+    "POST /webhooks/drizzle-claim",
+    "POST /webhooks/knex",
+    "POST /webhooks/mongoose",
+    "POST /webhooks/payout",
+    "POST /webhooks/dynamo",
+    "POST /webhooks/shopify"
+  ]
+}

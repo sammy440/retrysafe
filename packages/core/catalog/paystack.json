@@ -1,0 +1,72 @@
+{
+  "pack": "paystack",
+  "source": "https://paystack.com/docs/transfers/single-transfers/",
+  "notes": "Transfers are deduplicated by `reference` (reported behavior; confirm against Paystack's API reference).",
+  "effects": [
+    {
+      "match": {
+        "module": [
+          "paystack-api",
+          "paystack",
+          "paystack-node"
+        ],
+        "callee": "transfer.create"
+      },
+      "kind": "payment",
+      "idempotent": false,
+      "acceptsKey": {
+        "arg": 0,
+        "field": "reference"
+      }
+    },
+    {
+      "match": {
+        "module": [
+          "paystack-api",
+          "paystack",
+          "paystack-node"
+        ],
+        "callee": "transfer.bulk"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "paystack-api",
+          "paystack",
+          "paystack-node"
+        ],
+        "callee": "transaction.chargeAuthorization"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "paystack-api",
+          "paystack",
+          "paystack-node"
+        ],
+        "callee": "transaction.charge"
+      },
+      "kind": "payment",
+      "idempotent": false
+    },
+    {
+      "match": {
+        "module": [
+          "paystack-api",
+          "paystack",
+          "paystack-node"
+        ],
+        "callee": "refund.create"
+      },
+      "kind": "payment",
+      "idempotent": false
+    }
+  ],
+  "verify": []
+}

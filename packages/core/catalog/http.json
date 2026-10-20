@@ -1,0 +1,161 @@
+{
+  "pack": "http",
+  "source": "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/",
+  "notes": "Outbound HTTP is classified by method and URL (see providers.json hosts). `()` matches calling the module itself, e.g. axios(config) or fetch(url).",
+  "effects": [
+    {
+      "match": {
+        "module": "axios",
+        "callee": "post"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "axios",
+        "callee": "put"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "axios",
+        "callee": "patch"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "axios",
+        "callee": "request"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "axios",
+        "callee": "()"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "got",
+        "callee": "post"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "got",
+        "callee": "put"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "got",
+        "callee": "patch"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "got",
+        "callee": "()"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "ky",
+        "callee": "post"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "ky",
+        "callee": "put"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "ky",
+        "callee": "patch"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "ky",
+        "callee": "()"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "node-fetch",
+        "callee": "()"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "undici",
+        "callee": "request"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "undici",
+        "callee": "fetch"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    },
+    {
+      "match": {
+        "module": "global:fetch",
+        "callee": "()"
+      },
+      "kind": "http-call",
+      "idempotent": "unknown",
+      "classify": "http"
+    }
+  ],
+  "verify": []
+}
