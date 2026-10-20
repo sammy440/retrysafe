@@ -1,0 +1,77 @@
+name: retrysafe
+description: "Find webhook and queue handlers that double-charge, double-email, or drop events on retry. Annotates the exact lines in pull requests."
+author: retrysafe
+branding:
+  icon: repeat
+  color: orange
+
+inputs:
+  path:
+    description: "Directory to analyze, relative to the repository root."
+    default: "."
+  version:
+    description: "retrysafe version to run from npm."
+    default: "latest"
+  fail-on:
+    description: "Fail the step on findings at or above this severity (error, warning, info), or \"never\"."
+    default: "error"
+  changed-only:
+    description: "On pull requests, only report handlers whose code changed relative to the base branch."
+    default: "true"
+  sarif:
+    description: "Also upload results to GitHub code scanning (needs `security-events: write`)."
+    default: "false"
+  args:
+    description: "Extra arguments passed to retrysafe (for example --min-confidence high)."
+    default: ""
+
+outputs:
+  findings:
+    description: "Number of findings reported."
+    value: ${{ steps.run.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch the base branch for --changed
+      if: github.event_name == 'pull_request' && inputs.changed-only == 'true'
+      shell: bash
+      run: git fetch --no-tags --prune --depth=200 origin "${{ github.base_ref }}"
+
+    - name: Run retrysafe
+      id: run
+      shell: bash
+      env:
+        RS_PATH: ${{ inputs.path }}
+        RS_VERSION: ${{ inputs.version }}
+        RS_FAIL_ON: ${{ inputs.fail-on }}
+        RS_ARGS: ${{ inputs.args }}
+        RS_CHANGED: ${{ github.event_name == 'pull_request' && inputs.changed-only == 'true' && format('origin/{0}', github.base_ref) || '' }}
+      run: |
+        set +e
+        extra=()
+        [ -n "$RS_CHANGED" ] && extra+=(--changed "$RS_CHANGED")
+        [ "$RS_FAIL_ON" != "never" ] && extra+=(--ci --fail-on "$RS_FAIL_ON")
+        # shellcheck disable=SC2086
+        npx --yes "retrysafe@${RS_VERSION}" "$RS_PATH" --format github "${extra[@]}" $RS_ARGS | tee retrysafe-output.txt
+        code=${PIPESTATUS[0]}
+        echo "findings=$(grep -c '^::\(error\|warning\|notice\) ' retrysafe-output.txt || true)" >> "$GITHUB_OUTPUT"
+        rm -f retrysafe-output.txt
+        exit $code
+
+    - name: Write SARIF
+      if: always() && inputs.sarif == 'true'
+      shell: bash
+      env:
+        RS_PATH: ${{ inputs.path }}
+        RS_VERSION: ${{ inputs.version }}
+        RS_ARGS: ${{ inputs.args }}
+      # shellcheck disable=SC2086
+      run: npx --yes "retrysafe@${RS_VERSION}" "$RS_PATH" --format sarif -o retrysafe.sarif $RS_ARGS
+
+    - name: Upload SARIF
+      if: always() && inputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: retrysafe.sarif
+        category: retrysafe

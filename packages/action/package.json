@@ -1,0 +1,7 @@
+{
+  "name": "@retrysafe/action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub Action wrapper for the retrysafe CLI (composite action; see action.yml).",
+  "license": "MIT"
+}

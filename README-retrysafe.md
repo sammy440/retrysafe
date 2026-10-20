@@ -200,10 +200,10 @@ interface Finding {
 ### Phase 1: Foundation
 **Goal:** load a real project and walk its code.
 
-- [ ] Monorepo scaffold, shared tsconfig, lint, Vitest
-- [ ] Project loader: tsconfig resolution, monorepo workspaces, path aliases
+- [x] Monorepo scaffold, shared tsconfig, lint, Vitest
+- [x] Project loader: tsconfig resolution, monorepo workspaces, path aliases
 - [x] Symbol resolution through imports, re-exports, and aliases
-- [ ] Fixture set: small Express, Fastify, and Next.js projects with known good and bad handlers
+- [x] Fixture set: small Express, Fastify, and Next.js projects with known good and bad handlers
 - [x] Snapshot-style test harness comparing findings against expected output
 
 **Done when:** the loader resolves calls across files in every fixture project.
@@ -212,36 +212,36 @@ interface Finding {
 **Goal:** find the handlers automatically.
 
 - [x] Express: `app.post/put/patch`, `router.*`, mounted routers
-- [ ] Fastify: route registration, plugins, schema-based routes
-- [ ] Next.js: App Router `route.ts` exports (`POST`, `PUT`), Pages API routes, server actions
+- [x] Fastify: route registration, plugins, schema-based routes
+- [x] Next.js: App Router `route.ts` exports (`POST`, `PUT`), Pages API routes, server actions
 - [x] BullMQ and Bull: `new Worker(...)`, `queue.process(...)`
-- [ ] SQS and Lambda handler signatures
-- [ ] Signals: path contains `webhook`, signature verification calls, provider SDK event parsing
-- [ ] Manual override in config (`handlers: [...]`)
+- [x] SQS and Lambda handler signatures
+- [x] Signals: path contains `webhook`, signature verification calls, provider SDK event parsing
+- [x] Manual override in config (`handlers: [...]`)
 
 **Done when:** every handler in the fixtures is found, and ordinary non-webhook routes are not flagged as at-least-once.
 
 ### Phase 3: Effect catalog and classification
 **Goal:** know what each handler actually does.
 
-- [ ] Catalog format (YAML or JSON) with module, callee, kind, idempotency, key support
-- [ ] Database packs: Prisma, Drizzle, Knex, `pg`, Mongoose
-- [ ] Provider packs: Stripe, plus the payment and messaging providers listed in the effect catalog
-- [ ] Interprocedural walk: follow calls through your own functions to a bounded depth
-- [ ] Classify SQL and ORM calls as idempotent or not (upsert, `ON CONFLICT`, increment, plain insert)
-- [ ] Unknown-effect handling for unresolved calls
+- [x] Catalog format (YAML or JSON) with module, callee, kind, idempotency, key support
+- [x] Database packs: Prisma, Drizzle, Knex, `pg`, Mongoose
+- [x] Provider packs: Stripe, plus the payment and messaging providers listed in the effect catalog
+- [x] Interprocedural walk: follow calls through your own functions to a bounded depth
+- [x] Classify SQL and ORM calls as idempotent or not (upsert, `ON CONFLICT`, increment, plain insert)
+- [x] Unknown-effect handling for unresolved calls
 
 **Done when:** each fixture handler produces a complete, correct effect list.
 
 ### Phase 4: Guards and control flow
 **Goal:** understand whether effects are protected, and in what order.
 
-- [ ] CFG construction per function, including try/catch and early returns
-- [ ] Dominance analysis: does a guard dominate an effect on every path?
-- [ ] Guard detectors for each pattern (see Guard Patterns)
-- [ ] Key-source tracking: trace the dedupe key back to its origin (header, `event.id`, payload field, `Date.now()`, `uuid()`)
-- [ ] Middleware-level guards applied to a route
-- [ ] Transaction scope tracking
+- [x] CFG construction per function, including try/catch and early returns
+- [x] Dominance analysis: does a guard dominate an effect on every path?
+- [x] Guard detectors for each pattern (see Guard Patterns)
+- [x] Key-source tracking: trace the dedupe key back to its origin (header, `event.id`, payload field, `Date.now()`, `uuid()`)
+- [x] Middleware-level guards applied to a route
+- [x] Transaction scope tracking
 
 **Done when:** the analyzer correctly distinguishes protected from unprotected effects in all fixtures.
 
@@ -259,11 +259,11 @@ interface Finding {
 ### Phase 6: CLI, config, and adoption
 **Goal:** usable on a real, messy codebase.
 
-- [ ] `retrysafe`, `retrysafe init`, `retrysafe explain <finding>`
-- [ ] Config file with custom guards, effects, and ignored paths
-- [ ] Baseline file (`--update-baseline`) so existing issues do not block CI
-- [ ] Inline suppression with required reason
-- [ ] SARIF output
+- [x] `retrysafe`, `retrysafe init`, `retrysafe explain <finding>`
+- [x] Config file with custom guards, effects, and ignored paths
+- [x] Baseline file (`--update-baseline`) so existing issues do not block CI
+- [x] Inline suppression with required reason
+- [x] SARIF output
 - [ ] Publish to npm and verify `npx retrysafe` works
 
 **Done when:** it can be dropped into an existing repo without producing an unusable wall of findings.
@@ -271,27 +271,27 @@ interface Finding {
 ### Phase 7: Schema awareness
 **Goal:** know whether the database really protects against duplicates.
 
-- [ ] Prisma schema reader (`@@unique`, `@unique`, relations)
-- [ ] Drizzle schema reader (unique indexes and constraints)
-- [ ] SQL migration reader (unique indexes created by migrations)
-- [ ] Use schema facts in guard detection: a processed-events insert is only atomic if the key column is unique
-- [ ] Rule: `check-then-insert-race` (lookup then insert with no unique constraint behind it)
+- [x] Prisma schema reader (`@@unique`, `@unique`, relations)
+- [x] Drizzle schema reader (unique indexes and constraints)
+- [x] SQL migration reader (unique indexes created by migrations)
+- [x] Use schema facts in guard detection: a processed-events insert is only atomic if the key column is unique
+- [x] Rule: `check-then-insert-race` (lookup then insert with no unique constraint behind it)
 
 **Done when:** "insert into processed_events" is correctly judged protected or unprotected based on the real schema.
 
 ### Phase 8: More rules and provider packs
-- [ ] `swallowed-error-returns-2xx`, `permanent-error-returns-5xx`
-- [ ] `ack-timing` (response sent before or after work, relative to platform limits)
-- [ ] `wrong-event-field-as-key` (object id used instead of event id)
-- [ ] `incrementing-write-unguarded`, `non-atomic-multi-write`, `retry-loop-with-effect`
-- [ ] `queue-add-without-job-id`, `dedupe-ttl-short`
-- [ ] Provider packs for Paystack, Flutterwave, Shopify, GitHub, Twilio, SendGrid, Resend, nodemailer
-- [ ] Info-level rule: `order-dependence-assumed`
+- [x] `swallowed-error-returns-2xx`, `permanent-error-returns-5xx`
+- [x] `ack-timing` (response sent before or after work, relative to platform limits)
+- [x] `wrong-event-field-as-key` (object id used instead of event id)
+- [x] `incrementing-write-unguarded`, `non-atomic-multi-write`, `retry-loop-with-effect`
+- [x] `queue-add-without-job-id`, `dedupe-ttl-short`
+- [x] Provider packs for Paystack, Flutterwave, Shopify, GitHub, Twilio, SendGrid, Resend, nodemailer
+- [x] Info-level rule: `order-dependence-assumed`
 
 ### Phase 9: CI integration
-- [ ] GitHub Action with PR annotations on the exact lines
-- [ ] Only analyze handlers affected by the diff
-- [ ] Pre-commit hook
+- [x] GitHub Action with PR annotations on the exact lines
+- [x] Only analyze handlers affected by the diff
+- [x] Pre-commit hook
 
 ### Phase 10: Fixes
 - [ ] Optional `@retrysafe/guard` library: transactional processed-events guard for Postgres, Redis store
@@ -299,9 +299,9 @@ interface Finding {
 - [ ] Documentation of the safe patterns
 
 ### Phase 11: Dynamic verification (experimental)
-- [ ] Run a handler twice with a recorded payload against stubbed effects (module interception for DB, email, payment clients)
-- [ ] Compare the effect logs of run one and run two
-- [ ] Mark static findings as "confirmed" when the dynamic run reproduces the duplicate
+- [x] Run a handler twice with a recorded payload against stubbed effects (module interception for DB, email, payment clients)
+- [x] Compare the effect logs of run one and run two
+- [x] Mark static findings as "confirmed" when the dynamic run reproduces the duplicate
 
 ### Phase 12: Docs, playground, launch
 - [ ] Docs site: one page per rule with the failing sequence, why it happens, and the fix
