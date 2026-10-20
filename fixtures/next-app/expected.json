@@ -1,0 +1,3 @@
+{
+  "handlers": ["POST /api/webhooks/stripe", "POST /api/webhooks/github", "ANY /api/webhooks/paypal"]
+}

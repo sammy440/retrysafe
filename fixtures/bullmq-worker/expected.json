@@ -1,0 +1,3 @@
+{
+  "handlers": ["Worker queue \"invoices\"", "Worker queue \"notifications\"", "Worker queue \"payouts\""]
+}

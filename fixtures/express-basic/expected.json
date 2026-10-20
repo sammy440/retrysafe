@@ -1,0 +1,11 @@
+{
+  "handlers": [
+    "POST /webhooks/stripe",
+    "POST /webhooks/paystack",
+    "POST /webhooks/flutterwave",
+    "POST /webhooks/payout",
+    "POST /billing/callback",
+    "POST /billing/refund-webhook",
+    "POST /billing/topup-webhook"
+  ]
+}

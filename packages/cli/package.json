@@ -1,0 +1,21 @@
+{
+  "name": "retrysafe",
+  "version": "0.0.0",
+  "description": "Find webhook and queue handlers that double-charge, double-email, or drop events when a retry arrives.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "retrysafe": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@retrysafe/core": "workspace:^",
+    "ts-morph": "^28.0.0"
+  }
+}
