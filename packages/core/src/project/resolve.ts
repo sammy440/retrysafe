@@ -165,6 +165,34 @@ function moduleOfDeclaration(decl: Node, seen: Set<Node>): { module: string; via
   return undefined;
 }
 
+/**
+ * For discovery: the handler a route/export/worker registers, looking through wrappers like
+ * `withGuard(guard, key, handler)` or `withAuth(handler)` to their last function argument.
+ */
+export function resolveHandler(expr: Node | undefined): FunctionLike | undefined {
+  if (!expr) return undefined;
+  const direct = resolveFunction(expr);
+  if (direct) return direct;
+  const n = unwrap(expr);
+  if (Node.isCallExpression(n)) {
+    const args = n.getArguments();
+    for (let i = args.length - 1; i >= 0; i--) {
+      const fn = resolveHandler(args[i]);
+      if (fn) return fn;
+    }
+  }
+  return undefined;
+}
+
+/** Like functionFromDeclaration, also accepting `export const POST = withX(handler)`. */
+export function handlerFromDeclaration(decl: Node): FunctionLike | undefined {
+  const fn = functionFromDeclaration(decl);
+  if (fn) return fn;
+  if (Node.isVariableDeclaration(decl)) return resolveHandler(decl.getInitializer());
+  if (Node.isExportAssignment(decl)) return resolveHandler(decl.getExpression());
+  return undefined;
+}
+
 /** Module a type annotation's name is imported from (`FastifyInstance`, `SQSEvent`, `Prisma.TransactionClient`). */
 export function typeModule(typeNode: Node | undefined): { module: string; viaTransaction: boolean } | undefined {
   if (!typeNode || !Node.isTypeReference(typeNode)) return undefined;

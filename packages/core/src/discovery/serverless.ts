@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Node, SyntaxKind, type SourceFile } from "ts-morph";
-import { flatten, functionFromDeclaration, moduleOf, resolveFunction, typeModule, unwrap, type FunctionLike } from "../project/resolve";
+import { flatten, handlerFromDeclaration, moduleOf, resolveHandler, typeModule, unwrap, type FunctionLike } from "../project/resolve";
 import type { Candidate } from "./types";
 
 /** aws-lambda event types for sources that deliver at least once. */
@@ -52,7 +52,7 @@ export function discoverServerless(files: SourceFile[], root: string): Candidate
     for (const [name, decls] of sf.getExportedDeclarations()) {
       if (!HANDLER_EXPORTS.includes(name)) continue;
       for (const decl of decls) {
-        const fn = functionFromDeclaration(decl);
+        const fn = handlerFromDeclaration(decl);
         if (!fn) continue;
         const declType = Node.isVariableDeclaration(decl) ? decl.getTypeNode() : undefined;
         const source = eventSource(fn, declType);
@@ -79,7 +79,7 @@ export function discoverServerless(files: SourceFile[], root: string): Candidate
       for (const key of ["handleMessage", "handleMessageBatch"]) {
         const p = opts.getProperty(key);
         const value = p && Node.isPropertyAssignment(p) ? p.getInitializer() : p && Node.isShorthandPropertyAssignment(p) ? p.getNameNode() : p;
-        const fn = value && (Node.isMethodDeclaration(value) ? value : resolveFunction(value));
+        const fn = value && (Node.isMethodDeclaration(value) ? value : resolveHandler(value));
         if (!fn) continue;
         out.push({
           kind: "queue-worker",

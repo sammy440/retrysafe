@@ -29,6 +29,7 @@ export {
   type EffectCatalogEntry,
   type Pack,
 } from "./effects/catalog";
-export type { CustomGuard } from "./guards/detect";
+export { GUARD_LIBRARY, type CustomGuard } from "./guards/detect";
+export { flatten, isFunctionLike, resolveCall, resolveHandler, unwrap, type FunctionLike } from "./project/resolve";
 export { RULES, type Rule, type RuleDocs, type RuleSetting } from "./rules";
 export type * from "./types";

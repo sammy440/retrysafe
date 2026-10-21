@@ -1,5 +1,5 @@
 import { Node, SyntaxKind, type ObjectLiteralExpression, type SourceFile } from "ts-morph";
-import { flatten, isFunctionLike, moduleOf, resolveFunction, textOf, unwrap, type FunctionLike } from "../project/resolve";
+import { flatten, isFunctionLike, moduleOf, resolveFunction, resolveHandler, textOf, unwrap, type FunctionLike } from "../project/resolve";
 import { pathSignals, type Candidate } from "./types";
 
 const METHODS = new Set(["post", "put", "patch", "all"]);
@@ -54,7 +54,7 @@ export function discoverFastify(files: SourceFile[]): Candidate[] {
     return ["onRequest", "preParsing", "preValidation", "preHandler"].flatMap((h) => prop(o, h) ?? []);
   };
   const push = (call: Node, method: string, url: string, handlerNode: Node | undefined, receiver: Node, middleware: Node[] = []) => {
-    const fn = handlerNode && resolveFunction(handlerNode);
+    const fn = handlerNode && resolveHandler(handlerNode);
     if (!fn) return;
     const plugin = enclosingPlugin(receiver);
     const full = joinPath((plugin && prefixes.get(plugin)) ?? "", url);

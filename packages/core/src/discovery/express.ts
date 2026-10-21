@@ -1,5 +1,5 @@
 import { Node, SyntaxKind, type SourceFile } from "ts-morph";
-import { flatten, moduleOf, resolveFunction, resolveIdentifier, textOf, unwrap } from "../project/resolve";
+import { flatten, moduleOf, resolveHandler, resolveIdentifier, textOf, unwrap } from "../project/resolve";
 import { pathSignals, type Candidate } from "./types";
 
 const METHODS = new Set(["post", "put", "patch", "all"]);
@@ -60,7 +60,7 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
     if (routePath === undefined || args.length < (chained ? 1 : 2) || !last) continue;
     const receiver = flatten(chained ? (inner.getExpression() as import("ts-morph").PropertyAccessExpression).getExpression() : callee.getExpression()).root;
     if (!isExpress(receiver)) continue;
-    const fn = resolveFunction(last);
+    const fn = resolveHandler(last);
     if (!fn) continue;
     const decl = receiverDecl(receiver);
     const full = joinPath((decl && prefixes.get(decl)) ?? "", routePath);

@@ -4,6 +4,7 @@ import { EFFECT_CATALOG, VERIFY_CATALOG, chainMatches, findEntry, moduleMatches,
 import { classify } from "../effects/classify";
 import {
   exits,
+  guardLibraryRun,
   guardPrimitive,
   markerWrite,
   matchCustomGuard,
@@ -422,7 +423,8 @@ export class Walker {
     if (status !== undefined) this.pushResponse(call, status, ctx);
     if (isFloating(call) && !ctx.floating) ctx = { ...ctx, floating: true };
     const target = resolveCall(call);
-    const custom = matchCustomGuard(call, this.opts.customGuards);
+    const library = guardLibraryRun(call, target);
+    const custom = matchCustomGuard(call, this.opts.customGuards) ? guardPrimitive(call, target, this.opts.customGuards) : library;
     const isTransaction =
       target.kind === "external" && ["$transaction", "transaction"].includes(target.chain[target.chain.length - 1] ?? "");
 
@@ -436,14 +438,15 @@ export class Walker {
     if (DETACHED.has(calleeName)) argCtx = { ...argCtx, floating: true };
     if (target.kind === "external" && RETRY_MODULES.has(target.module)) argCtx = { ...argCtx, retry: argCtx.retry ?? loc };
     if (custom) {
-      const g = guardPrimitive(call, target, this.opts.customGuards)!;
-      argCtx = { ...argCtx, guards: [...argCtx.guards, this.recordGuard(call, g, ctx)] };
+      argCtx = { ...argCtx, guards: [...argCtx.guards, this.recordGuard(call, custom, ctx)] };
+      // Database guards run the callback inside the claim's transaction.
+      if (library?.transactional) argCtx = { ...argCtx, transaction: `${loc.file}:${loc.line}:${loc.column}` };
     }
     for (const arg of argsOf(call)) this.walk(arg, argCtx);
 
     if (custom) {
       // A bare configured guard (not wrapping a callback) is trusted to stop duplicates itself.
-      if (!argsOf(call).some((a) => isFunctionLike(unwrap(a)))) ctx.guards.push(this.recordGuard(call, guardPrimitive(call, target, this.opts.customGuards)!, ctx));
+      if (!argsOf(call).some((a) => isFunctionLike(unwrap(a)))) ctx.guards.push(this.recordGuard(call, custom, ctx));
       return;
     }
 

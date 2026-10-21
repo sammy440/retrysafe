@@ -13,6 +13,7 @@ import { discoverNext } from "./discovery/next";
 import { discoverProbot } from "./discovery/probot";
 import { discoverQueues } from "./discovery/queues";
 import { resolveMiddleware, type Candidate } from "./discovery/types";
+import { guardLibraryAdapter } from "./guards/detect";
 import { fromProject, loadProjects, type LoadedProject } from "./project/loader";
 import { runRules, type RuleSetting } from "./rules";
 import { fingerprint } from "./rules/shared";
@@ -170,6 +171,10 @@ export function analyzeLoaded(loaded: LoadedProject, opts: AnalyzeOptions = {}):
       extraEffects: opts.effects ?? [],
     });
     const mw = resolveMiddleware(c.middleware ?? [], opts.guards ?? []);
+    // A handler registered through withGuard(guard, key, handler) runs once per key.
+    const wrapper = c.fn.getParent();
+    const adapter = wrapper && guardLibraryAdapter(wrapper);
+    if (adapter) mw.guards.push({ node: wrapper, guard: adapter });
     const walked = walker.run(c.fn, mw.fns, mw.guards);
     const signals = [...c.signals];
     if (walked.checks.length) signals.push("signature-verify");
@@ -186,6 +191,7 @@ export function analyzeLoaded(loaded: LoadedProject, opts: AnalyzeOptions = {}):
       provider: inferProvider(c, loc.file, walked.checks),
       signals,
       serialized: serialized.includes(c.name) || isSerializedFile(loc.file) || undefined,
+      fnLocation: location(c.fn, loaded.root),
     };
     const p = handler.provider;
     handler.retryWindowHours = p ? (opts.providers?.[p]?.retryWindowHours ?? PROVIDERS[p]?.retryWindowHours) : undefined;

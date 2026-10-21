@@ -225,6 +225,57 @@ function sqlGuard(sql: string | undefined, paramsArg: Node | undefined): GuardPr
   return undefined;
 }
 
+export const GUARD_LIBRARY = "@retrysafe/guard";
+const GUARD_ADAPTERS = new Set(["withGuard", "withGuardRoute", "withGuardJob"]);
+
+/**
+ * `guard.run(key, fn)` from @retrysafe/guard: `fn` runs once per key. Database guards (postgresGuard,
+ * prismaGuard) also run `fn` inside the claim's transaction.
+ */
+export function guardLibraryRun(call: CallLike, target: CallTarget): (GuardPrimitive & { transactional: boolean }) | undefined {
+  if (target.kind !== "external" || target.module !== GUARD_LIBRARY || target.chain[target.chain.length - 1] !== "run") return undefined;
+  const callee = calleeOf(call);
+  const receiver = Node.isPropertyAccessExpression(callee) ? callee.getExpression() : callee;
+  // const guard = postgresGuard(pool)  ->  "postgresGuard"
+  let factory = "guard";
+  const sym = Node.isIdentifier(receiver) ? receiver.getSymbol() : undefined;
+  for (const d of (sym?.isAlias() ? sym.getAliasedSymbol() : sym)?.getDeclarations() ?? []) {
+    const init = Node.isVariableDeclaration(d) ? d.getInitializer() : undefined;
+    const u = init && unwrap(init);
+    if (u && Node.isCallExpression(u)) factory = u.getExpression().getText().split(".").pop() ?? factory;
+  }
+  return {
+    kind: "middleware",
+    atomic: true,
+    description: `${factory}.run() (@retrysafe/guard)`,
+    selfGuarding: true,
+    duplicateWhen: "unknown",
+    keyNodes: argsOf(call).slice(0, 1),
+    transactional: factory === "postgresGuard" || factory === "prismaGuard",
+  };
+}
+
+/** withGuard / withGuardRoute / withGuardJob(guard, getKey, handler) wrapping a handler function. */
+export function guardLibraryAdapter(call: Node): GuardPrimitive | undefined {
+  if (!Node.isCallExpression(call)) return undefined;
+  const callee = call.getExpression();
+  const name = callee.getText().split(".").pop() ?? "";
+  if (!GUARD_ADAPTERS.has(name)) return undefined;
+  const target = resolveImportModule(callee);
+  if (target !== GUARD_LIBRARY) return undefined;
+  return { kind: "middleware", atomic: true, description: `${name}() (@retrysafe/guard)`, selfGuarding: true, duplicateWhen: "unknown", keyNodes: call.getArguments().slice(1, 2) };
+}
+
+function resolveImportModule(n: Node): string | undefined {
+  const root = Node.isPropertyAccessExpression(n) ? n.getExpression() : n;
+  if (!Node.isIdentifier(root)) return undefined;
+  for (const d of root.getSymbol()?.getDeclarations() ?? []) {
+    const imp = d.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+    if (imp) return imp.getModuleSpecifierValue();
+  }
+  return undefined;
+}
+
 /** A later write that marks the event handled without claiming it (redis SET without NX, update of a processed-events row). */
 export function markerWrite(call: CallLike, target: CallTarget): string | undefined {
   if (target.kind !== "external") return undefined;

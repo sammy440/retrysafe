@@ -294,9 +294,9 @@ interface Finding {
 - [x] Pre-commit hook
 
 ### Phase 10: Fixes
-- [ ] Optional `@retrysafe/guard` library: transactional processed-events guard for Postgres, Redis store
-- [ ] Codemods that wrap a handler with the guard and extract the correct event id
-- [ ] Documentation of the safe patterns
+- [x] Optional `@retrysafe/guard` library: transactional processed-events guard for Postgres, Redis store
+- [x] Codemods that wrap a handler with the guard and extract the correct event id
+- [x] Documentation of the safe patterns
 
 ### Phase 11: Dynamic verification (experimental)
 - [x] Run a handler twice with a recorded payload against stubbed effects (module interception for DB, email, payment clients)

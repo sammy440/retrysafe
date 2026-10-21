@@ -1,0 +1,1 @@
+{ "compilerOptions": { "strict": false, "module": "ESNext", "moduleResolution": "Bundler", "noEmit": true }, "include": ["src", "app"] }

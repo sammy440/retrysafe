@@ -7,8 +7,10 @@ Static analysis for Node/TypeScript webhook handlers and queue workers. See
 
 ## Status
 
-Phases 1–9 and 11 of the [roadmap](README-retrysafe.md#build-phases) are built. Not yet: the runtime
-guard library and codemods (Phase 10), the docs site and playground (Phase 12), and publishing to npm.
+Phases 1–11 of the [roadmap](README-retrysafe.md#build-phases) are built. Not yet: the docs site and
+playground (Phase 12), and publishing to npm. The runtime library `@retrysafe/guard` lives in its own
+package (developed in a separate `retrysafe-backend` directory); the safe patterns are in
+[docs/patterns.md](docs/patterns.md).
 
 - **Discovery:** Express (mounted routers, `router.route()`, `app.use` middleware), Fastify (routes,
   `route()`, plugins with prefixes, preHandler hooks), Next.js App Router and Pages API routes, server
@@ -26,6 +28,11 @@ guard library and codemods (Phase 10), the docs site and playground (Phase 12), 
 - **Rules (16):** see `retrysafe rules`. Each finding has a failing sequence, a fix, and a code snippet
   for the library in use.
 - **Adoption:** `retrysafe.config.ts`, `init`, `explain`, baselines, inline suppressions with reasons.
+- **Codemods:** `retrysafe fix` (dry run; `--write` to apply) adds idempotency keys and job ids derived
+  from the event or job id, answers permanent failures with 400, and with `--guard <module>#<export>`
+  wraps handlers in `guard.run(eventKey…)`, moving Prisma/pg writes onto the transaction client.
+- **Guard library awareness:** `@retrysafe/guard` (`guard.run`, `withGuard`, `withGuardRoute`,
+  `withGuardJob`) is recognized without configuration.
 - **Output and CI:** terminal, JSON, Markdown, SARIF, GitHub annotations; `--changed`/`--staged`;
   a [GitHub Action](packages/action) and a [pre-commit hook](.pre-commit-hooks.yaml).
 - **`retrysafe verify` (experimental):** loads a handler with catalog libraries stubbed, delivers the

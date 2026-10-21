@@ -1,0 +1,6 @@
+{
+  "handlers": [
+    "POST /webhooks/stripe", "POST /webhooks/orders", "POST /webhooks/payouts", "POST /webhooks/clock",
+    "Worker queue \"receipts\"", "POST /api/webhooks/github", "POST /api/webhooks/shopify"
+  ]
+}

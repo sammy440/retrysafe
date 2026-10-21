@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { SourceFile } from "ts-morph";
-import { functionFromDeclaration } from "../project/resolve";
+import { handlerFromDeclaration } from "../project/resolve";
 import { pathSignals, type Candidate } from "./types";
 
 const APP_ROUTE = /(?:^|\/)(?:src\/)?app\/(.*?)\/?route\.[cm]?[jt]sx?$/;
@@ -24,7 +24,7 @@ export function discoverNext(files: SourceFile[], root: string): Candidate[] {
       const exported = sf.getExportedDeclarations();
       for (const method of METHODS) {
         for (const decl of exported.get(method) ?? []) {
-          const fn = functionFromDeclaration(decl);
+          const fn = handlerFromDeclaration(decl);
           if (!fn) continue;
           out.push({
             kind: "http-webhook",
@@ -44,7 +44,7 @@ export function discoverNext(files: SourceFile[], root: string): Candidate[] {
     if (pages) {
       const routePath = routeFromSegments(pages[1] ?? "");
       for (const decl of sf.getExportedDeclarations().get("default") ?? []) {
-        const fn = functionFromDeclaration(decl);
+        const fn = handlerFromDeclaration(decl);
         if (!fn) continue;
         out.push({
           kind: "http-webhook",

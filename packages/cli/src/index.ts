@@ -35,6 +35,7 @@ const HELP = `Usage:
   retrysafe explain <id> [dir]       Failing sequence, why it happens, and the fix
   retrysafe rules                    List rules
   retrysafe verify <handler|id> [dir] (experimental) Deliver an event twice against stubbed libraries
+  retrysafe fix [dir]                Preview codemods for findings (add idempotency keys, wrap with @retrysafe/guard)
 
 Find webhook and queue handlers that double-charge, double-email, or drop events on retry.
 
@@ -58,6 +59,9 @@ Options:
   --header <k=v>           verify: request header, repeatable
   --env <K=V>              verify: environment variable for the run, repeatable (e.g. a webhook secret)
   --quick                  verify: only the retry-after-success scenario
+  --write                  fix: apply the changes (default: print a diff)
+  --guard <module#export>  fix: @retrysafe/guard instance to wrap handlers with, e.g. "@/lib/guard#guard"
+  --rule <id>              fix: only fix this rule, repeatable
   -v, --version            Print the version
   -h, --help               Show this help
 `;
@@ -93,6 +97,9 @@ async function main(argv: string[]): Promise<number> {
       header: { type: "string", multiple: true },
       quick: { type: "boolean" },
       env: { type: "string", multiple: true },
+      write: { type: "boolean" },
+      guard: { type: "string" },
+      rule: { type: "string", multiple: true },
       "fail-on": { type: "string", default: "error" },
       version: { type: "boolean", short: "v" },
       help: { type: "boolean", short: "h" },
@@ -116,7 +123,8 @@ async function main(argv: string[]): Promise<number> {
   if (command === "init") return runInit(resolveRoot(rest[0]));
   const explainId = command === "explain" ? (rest[0] ?? fail("explain needs a finding id (shown in [brackets] in the report)")) : undefined;
   const verifyTarget = command === "verify" ? (rest[0] ?? fail("verify needs a handler name (as listed by --handlers) or a finding id")) : undefined;
-  const root = resolveRoot(command === "explain" || command === "verify" ? rest[1] : command);
+  const isFix = command === "fix";
+  const root = resolveRoot(command === "explain" || command === "verify" ? rest[1] : isFix ? rest[0] : command);
 
   // Config file, then CLI flags.
   const configPath = values.config ? path.resolve(values.config) : findConfig(root);
@@ -131,6 +139,21 @@ async function main(argv: string[]): Promise<number> {
   if (!(failOn in SEVERITY_RANK)) fail("--fail-on must be error, warning, or info");
   const maxDepth = values["max-depth"] === undefined ? undefined : Number(values["max-depth"]);
   if (maxDepth !== undefined && (!Number.isInteger(maxDepth) || maxDepth < 0)) fail("--max-depth must be a non-negative integer");
+
+  if (isFix) {
+    const { runFix } = await import("./fix/index");
+    const { renderFix } = await import("./fix/render");
+    const fixed = runFix({
+      root,
+      tsconfig: values.project,
+      ...optionsFromConfig(config, { maxCallDepth: maxDepth, minConfidence }),
+      guard: values.guard,
+      onlyRules: values.rule,
+    });
+    if (values.write) for (const [file, text] of fixed.changes) writeFileSync(file, text);
+    write(format === "json" ? `${JSON.stringify({ ...fixed, changes: undefined }, null, 2)}\n` : `${renderFix(fixed, !!values.write)}\n`);
+    return 0;
+  }
 
   let result: AnalysisResult = analyze({
     root,

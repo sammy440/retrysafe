@@ -21,6 +21,8 @@ export interface Handler {
   serialized?: boolean;
   /** How long the provider keeps retrying (config, then provider facts). */
   retryWindowHours?: number;
+  /** Where the handler function itself starts (the route call may be elsewhere). */
+  fnLocation?: SourceLocation;
 }
 
 export type EffectKind =

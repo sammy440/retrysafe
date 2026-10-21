@@ -1,5 +1,5 @@
 import { Node, SyntaxKind, type SourceFile } from "ts-morph";
-import { flatten, moduleOf, resolveFunction, textOf } from "../project/resolve";
+import { flatten, moduleOf, resolveHandler, textOf } from "../project/resolve";
 import type { Candidate } from "./types";
 
 /** BullMQ `new Worker(name, processor)` and Bull `queue.process([name], processor)`. */
@@ -12,7 +12,7 @@ export function discoverQueues(files: SourceFile[]): Candidate[] {
       const ctorName = chain[chain.length - 1] ?? root.getText();
       if (ctorName !== "Worker" || moduleOf(ctor)?.module !== "bullmq") continue;
       const [nameArg, processor] = expr.getArguments();
-      const fn = processor && resolveFunction(processor);
+      const fn = processor && resolveHandler(processor);
       if (!fn) continue;
       const queue = textOf(nameArg) ?? nameArg?.getText() ?? "?";
       out.push({
@@ -32,7 +32,7 @@ export function discoverQueues(files: SourceFile[]): Candidate[] {
       if (moduleOf(callee.getExpression())?.module !== "bull") continue;
       const args = call.getArguments();
       const last = args[args.length - 1];
-      const fn = last && resolveFunction(last);
+      const fn = last && resolveHandler(last);
       if (!fn) continue;
       const queueVar = flatten(callee.getExpression()).root.getText();
       const jobName = args.length > 1 ? textOf(args[0]) : undefined;
