@@ -7,5 +7,8 @@
     "outDir": "dist/types",
     "rootDir": "../core/src"
   },
-  "files": ["../core/src/config.ts"]
+  "files": [
+    "../core/src/config.ts",
+    "../core/src/index.ts"
+  ]
 }

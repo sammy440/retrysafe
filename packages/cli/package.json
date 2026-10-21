@@ -1,6 +1,6 @@
 {
   "name": "retrysafe",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Find webhook and queue handlers that double-charge, double-email, or drop events when a retry arrives.",
   "keywords": [
     "idempotency",
@@ -32,6 +32,11 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js",
       "require": "./dist/config.cjs"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
     },
     "./package.json": "./package.json"
   },

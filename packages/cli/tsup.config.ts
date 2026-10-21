@@ -12,8 +12,8 @@ export default defineConfig([
     banner: { js: "#!/usr/bin/env node" },
   },
   {
-    // Public library entry: `import { defineConfig } from "retrysafe"`.
-    entry: ["src/config.ts"],
+    // Public library entries: `import { defineConfig } from "retrysafe"` and `retrysafe/core`.
+    entry: ["src/config.ts", "src/core.ts"],
     format: ["esm", "cjs"],
     target: "node20",
     platform: "node",
