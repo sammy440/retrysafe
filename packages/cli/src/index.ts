@@ -64,7 +64,7 @@ Options:
   --guard <module#export>  fix: @retrysafe/guard instance to wrap handlers with, e.g. "@/lib/guard#guard"
   --rule <id>              fix: only fix this rule, repeatable
   --port <n>               live: local port (default 4317)
-  --site <url>             live: retrysafe site to view results on (default $RETRYSAFE_SITE_URL or http://localhost:3000)
+  --site <url>             live: retrysafe site to view results on (default $RETRYSAFE_SITE_URL or https://retrysafe-frontend.vercel.app)
   --origin <url>           live: extra browser origin allowed to connect, repeatable
   --open                   live: open the browser automatically
   --new-token              live: issue a new connection token (invalidates links you shared)

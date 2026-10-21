@@ -48,7 +48,7 @@ const time = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: 
 
 /** `retrysafe live`: analyze, watch, and stream results to the site until interrupted. */
 export async function runLive(opts: LiveCommandOptions): Promise<number> {
-  const site = (opts.site ?? process.env.RETRYSAFE_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const site = (opts.site ?? process.env.RETRYSAFE_SITE_URL ?? "https://retrysafe-frontend.vercel.app").replace(/\/$/, "");
   if (!Number.isInteger(opts.port) || opts.port < 0 || opts.port > 65535) throw new Error("--port must be a port number");
   const siteOrigin = new URL(site).origin;
   process.stdout.write(`retrysafe live: analyzing ${opts.root}…\n`);
