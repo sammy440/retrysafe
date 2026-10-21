@@ -7,8 +7,8 @@ Static analysis for Node/TypeScript webhook handlers and queue workers. See
 
 ## Status
 
-Phases 1–11 of the [roadmap](README-retrysafe.md#build-phases) are built. Not yet: the docs site and
-playground (Phase 12), and publishing to npm. The runtime library `@retrysafe/guard` lives in its own
+Phases 1–12 of the [roadmap](README-retrysafe.md#build-phases) are built (the docs site and playground
+live in a separate `retrysafe-frontend` directory). Not yet: publishing to npm. The runtime library `@retrysafe/guard` lives in its own
 package (developed in a separate `retrysafe-backend` directory); the safe patterns are in
 [docs/patterns.md](docs/patterns.md).
 
@@ -38,6 +38,10 @@ package (developed in a separate `retrysafe-backend` directory); the safe patter
 - **`retrysafe verify` (experimental):** loads a handler with catalog libraries stubbed, delivers the
   event twice (retry, concurrent duplicate, and a crash before each effect), and marks static findings
   confirmed when it reproduces the duplicate or the lost event.
+- **`retrysafe live`:** watches the project and re-analyzes on every save, streaming results to the
+  site's `/live` page over a local WebSocket (127.0.0.1 only, site origin plus a per-project token).
+  Findings link back into VS Code, Cursor, Windsurf or VSCodium. Flags: `--open`, `--port` (default
+  4317), `--site` (or `RETRYSAFE_SITE_URL`), `--origin`, `--new-token`.
 
 Control flow is analyzed structurally over the AST (blocks, branches, early exits, try/catch, switch,
 loops) rather than with an explicit CFG graph; this covers structured TypeScript, which has no goto.

@@ -304,8 +304,8 @@ interface Finding {
 - [x] Mark static findings as "confirmed" when the dynamic run reproduces the duplicate
 
 ### Phase 12: Docs, playground, launch
-- [ ] Docs site: one page per rule with the failing sequence, why it happens, and the fix
-- [ ] Playground: paste a handler, see the effect map and findings
+- [x] Docs site: one page per rule with the failing sequence, why it happens, and the fix
+- [x] Playground: paste a handler, see the effect map and findings
 - [ ] Demo GIF
 - [ ] Benchmark on open-source projects; report real findings
 
@@ -445,6 +445,7 @@ retrysafe --update-baseline       Record current findings as accepted
 retrysafe --format sarif          Machine-readable output for code scanning
 retrysafe --ci                    Non-zero exit on new findings above threshold
 retrysafe verify <handler>        (experimental) run twice against stubbed effects
+retrysafe live [--open]           Re-analyze on save; stream results to the /live page
 ```
 
 ## Report Format

@@ -31,8 +31,15 @@ import { builderFamily, classifyBuilder, isOutermostCall } from "../effects/buil
 import { failureReason, isFloating, responseStatus, returnedStatus } from "./http";
 import { traceKey } from "./keys";
 
+/**
+ * Parameters that carry the delivery itself (request, response, event, job) rather than a service:
+ * `req.text()`, `res.send()`, `job.updateProgress()` are not side effects on the outside world.
+ */
+const DELIVERY_PARAM = /^(req|request|res|response|reply|ctx|context|c|event|evt|job|record|message|msg|payload|body|next)$/;
+const DELIVERY_TYPE = /^(Request|NextRequest|NextApiRequest|NextApiResponse|Response|IncomingMessage|ServerResponse|FastifyRequest|FastifyReply|Context|Job|SQSRecord|SQSEvent)\b/;
+
 /** Method names that usually mean a side effect, for calls we cannot resolve. */
-const EFFECTFUL_NAME = /^(charge|pay|refund|transfer|payout|send|email|notify|sms|text|publish|enqueue|dispatch|emit|create|insert|save|persist|record|credit|debit|increment|decrement|grant|provision|fulfil|fulfill|ship|post|write|upsert|add|push|award|issue)/i;
+const EFFECTFUL_NAME = /^(charge|pay|refund|transfer|payout|send|email|notify|sms|publish|enqueue|dispatch|emit|create|insert|save|persist|record|credit|debit|increment|decrement|grant|provision|fulfil|fulfill|ship|post|write|upsert|add|push|award|issue)/i;
 
 export interface WalkOptions {
   root: string;
@@ -599,7 +606,13 @@ export class Walker {
     const method = chain[chain.length - 1];
     if (!method || !EFFECTFUL_NAME.test(method)) return;
     // Only receivers that come from outside the walked code: parameters, `this`, or their properties.
-    const fromOutside = Node.isThisExpression(root) || (Node.isIdentifier(root) && resolveIdentifier(root).some((r) => "decl" in r && Node.isParameterDeclaration(r.decl)));
+    const param = Node.isIdentifier(root)
+      ? resolveIdentifier(root)
+          .map((r) => ("decl" in r && Node.isParameterDeclaration(r.decl) ? r.decl : undefined))
+          .find(Boolean)
+      : undefined;
+    const deliveryParam = !!param && (DELIVERY_PARAM.test(param.getName()) || DELIVERY_TYPE.test(param.getTypeNode()?.getText() ?? ""));
+    const fromOutside = Node.isThisExpression(root) || (!!param && !deliveryParam);
     if (!fromOutside) return;
     this.pushEffect(call, ctx, {
       kind: "unknown",

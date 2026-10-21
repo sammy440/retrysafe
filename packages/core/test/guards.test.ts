@@ -223,4 +223,10 @@ describe("low-confidence heuristics", () => {
     expect(rules(run(body))).toEqual([]);
     expect(rules(run(body, { minConfidence: "low" }))).toEqual(["unguarded-side-effect"]);
   });
+
+  it("does not treat reading the delivery (req.text(), res.send(), job.updateProgress()) as unknown effects", () => {
+    const body = `  const raw = await req.text();\n}\nexport async function PATCH(request: Request, job: any) {\n  await request.text();\n  await job.updateProgress(50);`;
+    const r = run(body, { minConfidence: "low" });
+    expect(r.handlers.flatMap((h) => h.effects).filter((e) => e.kind === "unknown")).toEqual([]);
+  });
 });

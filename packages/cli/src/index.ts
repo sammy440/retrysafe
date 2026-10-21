@@ -36,6 +36,7 @@ const HELP = `Usage:
   retrysafe rules                    List rules
   retrysafe verify <handler|id> [dir] (experimental) Deliver an event twice against stubbed libraries
   retrysafe fix [dir]                Preview codemods for findings (add idempotency keys, wrap with @retrysafe/guard)
+  retrysafe live [dir]               Re-analyze on every save and show results live in the browser
 
 Find webhook and queue handlers that double-charge, double-email, or drop events on retry.
 
@@ -62,6 +63,11 @@ Options:
   --write                  fix: apply the changes (default: print a diff)
   --guard <module#export>  fix: @retrysafe/guard instance to wrap handlers with, e.g. "@/lib/guard#guard"
   --rule <id>              fix: only fix this rule, repeatable
+  --port <n>               live: local port (default 4317)
+  --site <url>             live: retrysafe site to view results on (default $RETRYSAFE_SITE_URL or http://localhost:3000)
+  --origin <url>           live: extra browser origin allowed to connect, repeatable
+  --open                   live: open the browser automatically
+  --new-token              live: issue a new connection token (invalidates links you shared)
   -v, --version            Print the version
   -h, --help               Show this help
 `;
@@ -98,6 +104,11 @@ async function main(argv: string[]): Promise<number> {
       quick: { type: "boolean" },
       env: { type: "string", multiple: true },
       write: { type: "boolean" },
+      port: { type: "string" },
+      site: { type: "string" },
+      origin: { type: "string", multiple: true },
+      open: { type: "boolean" },
+      "new-token": { type: "boolean" },
       guard: { type: "string" },
       rule: { type: "string", multiple: true },
       "fail-on": { type: "string", default: "error" },
@@ -121,6 +132,19 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (command === "init") return runInit(resolveRoot(rest[0]));
+  if (command === "live") {
+    const { runLive } = await import("./live/command");
+    return runLive({
+      root: resolveRoot(rest[0]),
+      port: values.port === undefined ? 4317 : Number(values.port),
+      site: values.site,
+      origins: values.origin ?? [],
+      open: !!values.open,
+      tsconfig: values.project,
+      configPath: values.config ? path.resolve(values.config) : undefined,
+      newToken: !!values["new-token"],
+    });
+  }
   const explainId = command === "explain" ? (rest[0] ?? fail("explain needs a finding id (shown in [brackets] in the report)")) : undefined;
   const verifyTarget = command === "verify" ? (rest[0] ?? fail("verify needs a handler name (as listed by --handlers) or a finding id")) : undefined;
   const isFix = command === "fix";

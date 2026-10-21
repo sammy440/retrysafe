@@ -15,7 +15,7 @@ export { applyBaseline, createBaseline, parseBaseline, staleBaselineEntries, typ
 export { applyInlineSuppressions } from "./suppress";
 export { filterByChangedFiles, handlerFiles } from "./changed";
 export { HandlerConfigError } from "./discovery/configured";
-export { loadProject, loadProjects, fromProject, type LoadedProject } from "./project/loader";
+export { loadProject, loadProjects, fromProject, projectSourceFiles, type LoadedProject } from "./project/loader";
 export { workspacePackages } from "./project/workspace";
 export {
   AWS_COMMANDS,
