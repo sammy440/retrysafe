@@ -21,7 +21,6 @@ async function verify(
   const result = analyze({ root });
   const report = result.handlers.find((h) => h.handler.name === handler);
   if (!report) throw new Error(`no handler ${handler}`);
-  // Like the CLI: deliver the first event type the handler branches on.
   const payload = { ...PAYLOAD, type: report.eventTypes[0] ?? PAYLOAD.type };
   return runVerify({ root, result, report, payload, headers: extra.headers?.(payload) ?? {}, env: extra.env });
 }

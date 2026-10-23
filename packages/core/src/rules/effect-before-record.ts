@@ -1,10 +1,6 @@
 import type { HandlerReport } from "../types";
 import { SNIPPETS, effectiveGuards, transactionalClaim, at, consequence, deliveryNarrative, sameTransaction, stableId, type Rule, type RuleFinding } from "./shared";
 
-/**
- * The handler checks "seen before?", does the work, and records the event only afterwards.
- * A crash between the work and the record leaves no record, so the retry does the work again.
- */
 export const effectBeforeRecord: Rule = {
   id: "effect-before-record",
   severity: "warning",
@@ -17,7 +13,6 @@ export const effectBeforeRecord: Rule = {
     const out: RuleFinding[] = [];
     for (const e of report.effects) {
       if (e.idempotent !== false || e.hasIdempotencyKey || e.kind === "unknown") continue;
-      // Unguarded effects are reported by unguarded-side-effect; effects behind an atomic claim are recorded before they run.
       const guards = effectiveGuards(e);
       if (guards.length === 0 || guards.some((g) => g.kind !== "lookup-then-insert")) continue;
       const record = report.records.find((r) => r.order > e.order && !sameTransaction(r, e));

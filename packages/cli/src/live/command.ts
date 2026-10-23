@@ -16,10 +16,6 @@ export interface LiveCommandOptions {
   newToken?: boolean;
 }
 
-/**
- * The token for a project, kept in a user-only file so restarting `retrysafe live` keeps the same link
- * and an open page reconnects by itself. `--new-token` rotates it.
- */
 function projectToken(root: string, rotate: boolean): string {
   const dir = path.join(process.env.XDG_STATE_HOME ?? path.join(homedir(), ".local", "state"), "retrysafe", "live");
   const file = path.join(dir, `${createHash("sha256").update(root).digest("hex").slice(0, 16)}.token`);
@@ -33,7 +29,6 @@ function projectToken(root: string, rotate: boolean): string {
     writeFileSync(file, token, { mode: 0o600 });
     chmodSync(file, 0o600);
   } catch {
-    // Not persisted: the link just changes on the next start.
   }
   return token;
 }
@@ -46,7 +41,6 @@ function openBrowser(url: string): void {
 
 const time = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-/** `retrysafe live`: analyze, watch, and stream results to the site until interrupted. */
 export async function runLive(opts: LiveCommandOptions): Promise<number> {
   const site = (opts.site ?? process.env.RETRYSAFE_SITE_URL ?? "https://retrysafe-frontend.vercel.app").replace(/\/$/, "");
   if (!Number.isInteger(opts.port) || opts.port < 0 || opts.port > 65535) throw new Error("--port must be a port number");

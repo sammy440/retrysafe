@@ -4,11 +4,6 @@ import { at, providerName, type Rule, type RuleFinding } from "./shared";
 const SERVERLESS = new Set(["next-app-router", "next-pages-api", "aws-lambda", "next-server-action"]);
 const NETWORK = new Set(["payment", "email", "sms", "http-call", "enqueue"]);
 
-/**
- * Work that runs after the 2xx (or is never awaited) is unprotected: if it fails the provider already
- * considers the event delivered, and serverless platforms may freeze the function before it finishes.
- * Long chains of awaited network calls before responding risk the provider's timeout and a retry.
- */
 export const ackTiming: Rule = {
   id: "ack-timing",
   severity: "warning",
@@ -22,7 +17,6 @@ export const ackTiming: Rule = {
     const serverless = SERVERLESS.has(report.handler.framework);
     const p = providerName(report.handler);
 
-    // (a) acknowledged first, work after
     const ack = report.responses.find((r) => r.topLevel && r.status < 300 && !r.implicit);
     if (ack) {
       const after = report.effects.filter((e) => e.order > ack.order && e.kind !== "unknown");
@@ -41,7 +35,6 @@ export const ackTiming: Rule = {
       }
     }
 
-    // (b) work that is never awaited
     for (const e of report.effects) {
       if (!e.floating || e.kind === "unknown") continue;
       out.push({
@@ -49,7 +42,6 @@ export const ackTiming: Rule = {
         severity: this.severity,
         confidence: serverless ? "high" : "medium",
         handler: report.handler.id,
-        // Point at the call in the handler, where the missing await belongs.
         location: e.path[0] ?? e.location,
         effect: e,
         message: `${e.callee} is not awaited${serverless ? "; the platform may freeze the function after the response, cutting it off" : "; its failure is never seen and the event is acknowledged anyway"}`,
@@ -58,7 +50,6 @@ export const ackTiming: Rule = {
       });
     }
 
-    // (c) many sequential network calls before responding
     const firstOk = report.responses.find((r) => r.status < 300);
     const before = report.effects.filter((e) => NETWORK.has(e.kind) && !e.floating && (!firstOk || e.order < firstOk.order));
     if (report.handler.kind === "http-webhook" && before.length >= 4) {

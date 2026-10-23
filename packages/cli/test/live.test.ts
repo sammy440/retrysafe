@@ -22,7 +22,6 @@ async function start(fixture: string): Promise<{ root: string; server: LiveServe
   return { root, server };
 }
 
-/** Connects like the browser does and collects messages. */
 function connect(server: LiveServer, opts: { token?: string; origin?: string } = {}) {
   const messages: LiveMessage[] = [];
   const waiters: { pred: (m: LiveMessage) => boolean; resolve: (m: LiveMessage) => void }[] = [];
@@ -60,7 +59,6 @@ describe("retrysafe live", () => {
     const f = first.type === "result" ? first.result.findings.find((x) => x.location.file === "src/routes/billing.ts" && x.location.line === 38) : undefined;
     expect(f?.excerpt?.lines.some((l) => l.includes("paymentIntents.create"))).toBe(true);
 
-    // The user adds an idempotency key in their editor and saves.
     const file = path.join(root, "src/routes/billing.ts");
     writeFileSync(file, readFileSync(file, "utf8").replace('currency: "usd", confirm: true });', 'currency: "usd", confirm: true }, { idempotencyKey: `topup:${customer}` });'));
 

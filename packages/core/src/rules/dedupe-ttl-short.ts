@@ -5,7 +5,6 @@ function human(seconds: number): string {
   return seconds >= 86400 ? `${+(seconds / 86400).toFixed(1)}d` : seconds >= 3600 ? `${+(seconds / 3600).toFixed(1)}h` : `${Math.round(seconds / 60)}m`;
 }
 
-/** Dedupe keys that expire before the provider stops retrying. */
 export const dedupeTtlShort: Rule = {
   id: "dedupe-ttl-short",
   severity: "warning",

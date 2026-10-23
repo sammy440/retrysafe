@@ -11,13 +11,11 @@ const IGNORED = /(^|\/)(node_modules|\.git|dist|build|\.next|\.turbo|coverage|\.
 export interface LiveOptions {
   root: string;
   port: number;
-  /** Browser origins allowed to connect (the retrysafe site). */
   origins: string[];
   tsconfig?: string;
   configPath?: string;
   debounceMs?: number;
   log?: (msg: string) => void;
-  /** Reuse a token (so an open page reconnects after a restart); a random one is made otherwise. */
   token?: string;
 }
 
@@ -40,14 +38,8 @@ function sameToken(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/**
- * Serves live analysis of a project to the retrysafe site over a WebSocket on 127.0.0.1. Only the
- * configured origins, presenting the random token printed in the terminal, may connect; nothing is
- * exposed beyond the local machine.
- */
 export async function startLiveServer(opts: LiveOptions): Promise<LiveServer> {
   const log = opts.log ?? (() => {});
-  // The loader works on real paths; watch and resolve against the same one (macOS /var -> /private/var).
   opts = { ...opts, root: realpathSync.native(opts.root) };
   const token = opts.token ?? randomBytes(18).toString("base64url");
   const session = new LiveSession(opts.root, { tsconfig: opts.tsconfig, configPath: opts.configPath });
@@ -78,7 +70,6 @@ export async function startLiveServer(opts: LiveOptions): Promise<LiveServer> {
   };
   run([]);
 
-  // Debounced re-analysis: editors often write a file several times per save.
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let busy = Promise.resolve();
@@ -118,7 +109,6 @@ export async function startLiveServer(opts: LiveOptions): Promise<LiveServer> {
     if (originOk(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin!);
       res.setHeader("Vary", "Origin");
-      // Chrome's Private Network Access preflight for pages reaching localhost.
       res.setHeader("Access-Control-Allow-Private-Network", "true");
     }
     if (req.method === "OPTIONS") {
@@ -144,7 +134,6 @@ export async function startLiveServer(opts: LiveOptions): Promise<LiveServer> {
     wss.handleUpgrade(req, socket, head, (ws) => {
       clients.add(ws);
       ws.on("close", () => clients.delete(ws));
-      // Clients only listen; anything they send is ignored.
       send(ws, { type: "hello", root: opts.root, name: path.basename(opts.root), version: 1 });
       if (latest) send(ws, { type: "result", ...latest });
       else if (lastError) send(ws, { type: "error", message: lastError });

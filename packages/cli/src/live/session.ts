@@ -17,7 +17,6 @@ import {
 import { findConfig, loadConfig } from "../load-config";
 
 const SOURCE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
-/** Changes to these rebuild the whole project instead of refreshing files. */
 const STRUCTURAL = /(^|\/)(tsconfig[^/]*\.json|package\.json|retrysafe\.config\.[^/]+|\.retrysafe-baseline\.json|[^/]+\.prisma|[^/]+\.sql|pnpm-workspace\.yaml)$/;
 
 export interface Excerpt {
@@ -32,10 +31,6 @@ export interface LiveResult {
   at: number;
 }
 
-/**
- * A project kept in memory between analyses: file changes refresh only the affected source files, so
- * re-analysis after a save skips loading and parsing everything again.
- */
 export class LiveSession {
   private projects: LoadedProject[] = [];
   private config: RetrysafeConfig = {};
@@ -53,7 +48,6 @@ export class LiveSession {
     this.projects = loadProjects(this.root, this.overrides.tsconfig);
   }
 
-  /** Apply file changes (relative paths). Returns true if the project had to be reloaded. */
   async apply(changed: string[]): Promise<boolean> {
     if (changed.some((f) => STRUCTURAL.test(f))) {
       await this.load();
@@ -71,7 +65,6 @@ export class LiveSession {
         if (exists) sf.refreshFromFileSystemSync();
         else p.project.removeSourceFile(sf);
       }
-      // A new file joins the project whose tsconfig directory contains it most closely.
       if (!known && exists) {
         const dirOf = (p: LoadedProject) => {
           const cfg = p.project.getCompilerOptions().configFilePath as string | undefined;
@@ -92,7 +85,6 @@ export class LiveSession {
     let result = mergeResults(this.projects.map((p) => analyzeLoaded(p, this.options)));
     const baselinePath = path.resolve(this.root, this.config.baseline ?? DEFAULT_BASELINE);
     if (existsSync(baselinePath)) result = applyBaseline(result, parseBaseline(readFileSync(baselinePath, "utf8")));
-    // Excerpts on both the flat list and each handler's findings (the browser renders per handler).
     const withExcerpt = <F extends AnalysisResult["findings"][number]>(f: F) => ({ ...f, excerpt: this.excerpt(f.location.file, f.location.line) });
     const withExcerpts = {
       ...result,
@@ -102,7 +94,6 @@ export class LiveSession {
     return { result: withExcerpts, durationMs: Date.now() - started, changedFiles, at: Date.now() };
   }
 
-  /** A few lines around a finding, for showing it without opening the file. */
   private excerpt(file: string, line: number): Excerpt | undefined {
     const abs = path.join(this.root, file);
     const sf = this.projects.map((p) => p.project.getSourceFile(abs)).find(Boolean);

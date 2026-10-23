@@ -15,7 +15,6 @@ function prop(obj: ObjectLiteralExpression, name: string): Node | undefined {
   return undefined;
 }
 
-/** The plugin function a route is registered inside, if its first parameter is the receiver. */
 function enclosingPlugin(receiver: Node): FunctionLike | undefined {
   if (!Node.isIdentifier(receiver)) return undefined;
   const decl = receiver.getSymbol()?.getDeclarations()[0];
@@ -24,15 +23,10 @@ function enclosingPlugin(receiver: Node): FunctionLike | undefined {
   return isFunctionLike(fn) ? fn : undefined;
 }
 
-/**
- * Fastify: `app.post(url, [opts], handler)`, `app.route({ method, url, handler })`, routes registered inside
- * plugins, and `app.register(plugin, { prefix })` prefixes (one level).
- */
 export function discoverFastify(files: SourceFile[]): Candidate[] {
   const calls = files.flatMap((sf) => sf.getDescendantsOfKind(SyntaxKind.CallExpression));
   const isFastify = (n: Node) => moduleOf(n)?.module === "fastify";
 
-  // Plugins passed to register() take a Fastify instance as their first parameter, typed or not.
   const prefixes = new Map<Node, string>();
   const plugins = new Set<Node>();
   for (const call of calls) {
@@ -97,7 +91,6 @@ export function discoverFastify(files: SourceFile[]): Candidate[] {
     const url = textOf(args[0]);
     if (url === undefined || args.length < 2) continue;
     const last = unwrap(args[args.length - 1]!);
-    // app.post(url, { handler }) or app.post(url, opts, handler)
     const handler = Node.isObjectLiteralExpression(last) ? prop(last, "handler") : last;
     push(call, name, url, handler, receiver, hooks(args.length > 2 ? args[1] : Node.isObjectLiteralExpression(last) ? last : undefined));
   }

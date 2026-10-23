@@ -8,7 +8,6 @@ import { deliver, type Delivery, type DeliveryResult } from "./drivers";
 import { SimulatedCrash, VerifyRuntime, type CallRecord } from "./runtime";
 import { stubFor } from "./stubs";
 
-/** Libraries replaced by recording stubs: every catalog pack plus frameworks, verifiers, and id generators. */
 const FRAMEWORKS = [
   "express", "fastify", "next/server", "next/headers", "bullmq", "bull", "sqs-consumer", "probot", "mongoose", "knex",
   "drizzle-orm", "drizzle-orm/node-postgres", "drizzle-orm/postgres-js", "drizzle-orm/neon-http", "drizzle-orm/neon-serverless",
@@ -26,7 +25,6 @@ export function stubbedModules(extra: string[] = []): string[] {
 
 export interface VerifyOptions {
   root: string;
-  /** Static analysis of the project, already filtered/configured. */
   result: AnalysisResult;
   report: HandlerReport;
   payload: unknown;
@@ -34,16 +32,13 @@ export interface VerifyOptions {
   concurrent?: boolean;
   crashSweep?: boolean;
   extraStubs?: string[];
-  /** Environment variables for the run; unset variables read as placeholder strings. */
   env?: Record<string, string>;
 }
 
 export interface Scenario {
   name: string;
   deliveries: DeliveryResult[];
-  /** Effect sites performed by delivery 1 and again by delivery 2. */
   repeated: Site[];
-  /** Effect sites performed by the clean run but by neither delivery of this scenario. */
   lost: Site[];
   deduped: Site[];
 }
@@ -78,7 +73,6 @@ function performed(calls: CallRecord[], run: number): Map<string, Site> {
   return out;
 }
 
-/** TypeScript `paths` as jiti aliases: "@/*" -> "<baseUrl>/*" becomes "@" -> "<dir>". */
 function pathAliases(root: string): Record<string, string> {
   const alias: Record<string, string> = {};
   for (const loaded of loadProjects(root)) {
@@ -95,7 +89,6 @@ function pathAliases(root: string): Record<string, string> {
   return alias;
 }
 
-/** `process.env.NAME` / `process.env["NAME"]` references in the project. */
 function envNames(root: string): Set<string> {
   const out = new Set<string>();
   for (const loaded of loadProjects(root)) {
@@ -106,7 +99,6 @@ function envNames(root: string): Set<string> {
   return out;
 }
 
-/** Names each module is imported by in the project: `import { PrismaClient } from "@prisma/client"`. */
 function importedNames(root: string): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   for (const loaded of loadProjects(root)) {
@@ -121,7 +113,6 @@ function importedNames(root: string): Map<string, Set<string>> {
   return out;
 }
 
-/** Files to import so the handler's routes get registered: its own file, then files that import it. */
 function importOrder(root: string, file: string): string[] {
   const abs = path.join(root, file);
   const order = [abs];
@@ -142,10 +133,6 @@ function importOrder(root: string, file: string): string[] {
   return [...new Set(order)];
 }
 
-/**
- * Experimental dynamic verification: load the handler with stubbed libraries, deliver the same event
- * twice (sequentially, concurrently, and with a crash injected before each effect), and compare.
- */
 export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
   const rt = new VerifyRuntime(opts.root);
   const cache = new Map<string, unknown>();
@@ -162,7 +149,6 @@ export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
   for (const m of stubbedModules(opts.extraStubs)) {
     const file = path.join(dir, ...m.split("/"), "index.js");
     mkdirSync(path.dirname(file), { recursive: true });
-    // Node loads these natively, so named exports must be statically visible (`module.exports.X =`).
     const named = [...(names.get(m) ?? [])].filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && n !== "default");
     writeFileSync(
       file,
@@ -178,8 +164,6 @@ export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
   }
 
   const realEnv = process.env;
-  // Handlers read secrets at import time (new Stripe(process.env.STRIPE_KEY!)); give the ones the project
-  // references a placeholder so the code runs, without touching variables tooling depends on.
   const placeholders = Object.fromEntries([...envNames(opts.root)].filter((k) => !(k in realEnv)).map((k) => [k, `retrysafe_${k.toLowerCase()}`]));
   process.env = { ...realEnv, ...placeholders, ...opts.env };
   const realFetch = globalThis.fetch;
@@ -213,21 +197,18 @@ export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
       return { name, deliveries, repeated, lost, deduped };
     };
 
-    // 1. Retry after a successful delivery.
     rt.reset();
     const seq = [await one(1), await one(2)];
     const clean = performed(rt.calls, 1);
     scenarios.push(analyze("retry after success", seq));
     if (seq[0]?.error && !clean.size) notes.push(`delivery 1 failed before any effect: ${seq[0].error}`);
 
-    // 2. Two copies at once.
     if (opts.concurrent !== false) {
       rt.reset();
       const both = await Promise.all([one(1), one(2)]);
       scenarios.push(analyze("concurrent duplicate", both));
     }
 
-    // 3. Crash before each effect of delivery 1, then retry.
     if (opts.crashSweep !== false) {
       for (let i = 1; i <= clean.size; i++) {
         rt.reset(i);
@@ -239,7 +220,6 @@ export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
       }
     }
 
-    // Static findings confirmed by a scenario: the finding's effect (or its call site) repeated or was lost.
     const DUP_RULES = new Set(["unguarded-side-effect", "incrementing-write-unguarded", "nondeterministic-key", "check-then-insert-race", "effect-before-record", "queue-add-without-job-id", "effect-missing-idempotency-key", "retry-loop-with-effect"]);
     const LOSS_RULES = new Set(["record-before-effect-no-tx"]);
     const confirmed: VerifyReport["confirmed"] = [];
@@ -260,7 +240,6 @@ export async function runVerify(opts: VerifyOptions): Promise<VerifyReport> {
   } finally {
     globalThis.fetch = realFetch;
     process.env = realEnv;
-    // jiti shares Node's require cache: drop the project's modules and the stubs so a later run starts clean.
     const cache = createRequire(import.meta.url).cache;
     for (const key of Object.keys(cache)) if (key.startsWith(opts.root) || key.startsWith(dir)) delete cache[key];
     rmSync(dir, { recursive: true, force: true });

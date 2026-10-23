@@ -14,27 +14,17 @@ import sql from "../../catalog/sql.json";
 import stripe from "../../catalog/stripe.json";
 import type { EffectKind, KeySpec } from "../types";
 
-/**
- * How to decide idempotency beyond a fixed value:
- * - "prisma-write": inspect `data` for increment/decrement/push, `skipDuplicates`
- * - "sql": inspect the SQL text (INSERT without ON CONFLICT, `x = x + 1`, ...)
- * - "graphql": mutation vs query, and Shopify's @idempotent directive
- * - "http": method, URL host (providers.json), and idempotency headers or body keys
- * - "dynamo": conditional puts and relative update expressions
- */
 export type Classifier = "prisma-write" | "sql" | "graphql" | "http" | "dynamo";
 
 export interface EffectCatalogEntry {
   match: {
     module: string | string[];
-    /** Dot-separated member chain matched against the end of the call's chain. `*` matches one segment; `()` matches calling the module itself. */
     callee: string;
   };
   kind: EffectKind;
   idempotent: boolean | "unknown";
   acceptsKey?: KeySpec;
   classify?: Classifier;
-  /** Documentation backing the idempotency/key facts. */
   source?: string;
 }
 
@@ -43,7 +33,6 @@ export interface VerifyCatalogEntry {
   provider?: string;
 }
 
-/** One provider or library pack, as stored in catalog/*.json. */
 export interface Pack {
   pack: string;
   source: string;
@@ -84,7 +73,6 @@ const { hosts, ...providerFacts } = providers;
 export const PROVIDERS = providerFacts as Record<string, ProviderFact>;
 export const HTTP_HOSTS = hosts as Record<string, HostFact>;
 
-/** Models and tables whose names suggest they record processed events. */
 export const DEDUPE_NAME = /processed|dedup|idempot|webhook_?events?|inbox|seen_?events?/i;
 
 export function chainMatches(pattern: string, chain: string[]): boolean {

@@ -1,7 +1,6 @@
 import type { HandlerReport, KeySource } from "../types";
 import { SNIPPETS, consequence, deliveryNarrative, type Rule, type RuleFinding } from "./shared";
 
-/** A dedupe or idempotency key built from Date.now(), uuid(), ... is different on every retry, so nothing is deduplicated. */
 export const nondeterministicKey: Rule = {
   id: "nondeterministic-key",
   severity: "error",

@@ -1,13 +1,10 @@
 import type { HandlerReport, KeySource } from "../types";
 import type { Rule, RuleFinding } from "./shared";
 
-/** Stripe-style payloads nest the object under data.object; its id is shared by every event about the object. */
 const OBJECT_ID = /\.data\.object\.(id|\w+_id)$|\.(resource|object)\.id$/i;
-/** Providers without a top-level event id (Paystack, Flutterwave) are commonly keyed on data.id: only a weak signal. */
 const DATA_ID = /\.data\.(id|\w+_id)$/i;
 const EVENT_LEVEL = /(^|\.)(type|event_type|eventType)$|^(event|evt|webhookEvent|e|body|payload|req\.body)\.id$/i;
 
-/** A dedupe key built from the resource id inside the event instead of the event id. */
 export const wrongEventFieldAsKey: Rule = {
   id: "wrong-event-field-as-key",
   severity: "warning",

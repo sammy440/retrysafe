@@ -17,7 +17,6 @@ function prop(obj: Node | undefined, name: string): Node | undefined {
   return undefined;
 }
 
-/** AWS SDK v3: `client.send(new SendMessageCommand(input))`, classified by command name. */
 export function classifyAwsSend(call: CallLike): AwsResult | undefined {
   if (!Node.isCallExpression(call)) return undefined;
   const cmd = call.getArguments()[0] && unwrap(call.getArguments()[0]!);
@@ -32,7 +31,6 @@ export function classifyAwsSend(call: CallLike): AwsResult | undefined {
   if (fact.classify === "dynamo") {
     const condition = textOf(prop(input, "ConditionExpression")) ?? "";
     if (/^Put/.test(name) && /attribute_not_exists/.test(condition)) {
-      // A conditional put throws ConditionalCheckFailed on a duplicate: an atomic claim.
       const item = prop(input, "Item");
       return {
         type: "guard",

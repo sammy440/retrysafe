@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import picomatch from "picomatch";
 
-/** Workspace package globs from package.json (npm/yarn/bun) and pnpm-workspace.yaml. */
 export function workspacePatterns(root: string): string[] {
   const patterns: string[] = [];
   const pkgPath = path.join(root, "package.json");
@@ -11,12 +10,10 @@ export function workspacePatterns(root: string): string[] {
       const ws = (JSON.parse(readFileSync(pkgPath, "utf8")) as { workspaces?: string[] | { packages?: string[] } }).workspaces;
       patterns.push(...(Array.isArray(ws) ? ws : (ws?.packages ?? [])));
     } catch {
-      // An unreadable package.json just means no workspaces.
     }
   }
   const pnpmPath = path.join(root, "pnpm-workspace.yaml");
   if (existsSync(pnpmPath)) {
-    // Only the `packages:` list matters here; a full YAML parser is not needed for it.
     let inPackages = false;
     for (const line of readFileSync(pnpmPath, "utf8").split("\n")) {
       if (/^packages\s*:/.test(line)) {
@@ -31,7 +28,6 @@ export function workspacePatterns(root: string): string[] {
   return patterns;
 }
 
-/** Directories (absolute) of workspace packages that contain a package.json. Negated patterns ("!x") exclude. */
 export function workspacePackages(root: string, maxDepth = 4): string[] {
   const patterns = workspacePatterns(root).map((p) => p.replace(/\/+$/, ""));
   if (!patterns.length) return [];
@@ -52,10 +48,8 @@ export function workspacePackages(root: string, maxDepth = 4): string[] {
   return out;
 }
 
-/** tsconfig files referenced by a solution-style tsconfig ({ "files": [], "references": [...] }). */
 export function tsconfigReferences(tsconfigPath: string): string[] {
   try {
-    // tsconfig allows comments and trailing commas.
     const text = readFileSync(tsconfigPath, "utf8")
       .replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (_m, str) => str ?? "")
       .replace(/,(\s*[}\]])/g, "$1");

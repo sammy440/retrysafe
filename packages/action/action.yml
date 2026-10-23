@@ -52,7 +52,6 @@ runs:
         extra=()
         [ -n "$RS_CHANGED" ] && extra+=(--changed "$RS_CHANGED")
         [ "$RS_FAIL_ON" != "never" ] && extra+=(--ci --fail-on "$RS_FAIL_ON")
-        # shellcheck disable=SC2086
         npx --yes "retrysafe@${RS_VERSION}" "$RS_PATH" --format github "${extra[@]}" $RS_ARGS | tee retrysafe-output.txt
         code=${PIPESTATUS[0]}
         echo "findings=$(grep -c '^::\(error\|warning\|notice\) ' retrysafe-output.txt || true)" >> "$GITHUB_OUTPUT"
@@ -66,7 +65,6 @@ runs:
         RS_PATH: ${{ inputs.path }}
         RS_VERSION: ${{ inputs.version }}
         RS_ARGS: ${{ inputs.args }}
-      # shellcheck disable=SC2086
       run: npx --yes "retrysafe@${RS_VERSION}" "$RS_PATH" --format sarif -o retrysafe.sarif $RS_ARGS
 
     - name: Upload SARIF

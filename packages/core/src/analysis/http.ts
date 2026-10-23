@@ -1,7 +1,6 @@
 import { Node, SyntaxKind } from "ts-morph";
 import { flatten, moduleOf, resolveIdentifier, unwrap } from "../project/resolve";
 
-/** Evaluate a numeric expression: literals, + - * /, parentheses, and `const` identifiers. */
 export function evalNumber(node: Node | undefined, depth = 0): number | undefined {
   if (!node || depth > 6) return undefined;
   const n = unwrap(node);
@@ -27,10 +26,6 @@ export function evalNumber(node: Node | undefined, depth = 0): number | undefine
 
 const EXPRESS_SEND = new Set(["send", "json", "jsonp", "sendStatus", "end", "redirect", "sendFile", "render"]);
 
-/**
- * If this call sends an HTTP response (Express `res.status(400).json()`, `res.sendStatus(200)`, Fastify
- * `reply.code(500).send()`), the status it sends (200 when none is set).
- */
 export function responseStatus(call: Node): number | undefined {
   if (!Node.isCallExpression(call)) return undefined;
   const callee = unwrap(call.getExpression());
@@ -43,7 +38,6 @@ export function responseStatus(call: Node): number | undefined {
   if (module === "fastify" && name !== "send") return undefined;
   if (name === "sendStatus") return evalNumber(call.getArguments()[0]) ?? 200;
   if (name === "redirect") return 302;
-  // res.status(400).json(...) / reply.code(500).send(...): the status call is the chain root.
   let n: Node = unwrap(callee.getExpression());
   while (Node.isCallExpression(n)) {
     const c = unwrap(n.getExpression());
@@ -53,7 +47,6 @@ export function responseStatus(call: Node): number | undefined {
   return 200;
 }
 
-/** Status of a returned web Response (`new Response(b, { status })`, `Response.json`, `NextResponse.json`) or Lambda result. */
 export function returnedStatus(expr: Node | undefined): number | undefined {
   if (!expr) return undefined;
   const n = unwrap(expr);
@@ -68,14 +61,12 @@ export function returnedStatus(expr: Node | undefined): number | undefined {
     const text = n.getExpression().getText();
     if (/^(Response|NextResponse)\.json$/.test(text)) return statusOf(n.getArguments()[1]);
     if (/^NextResponse\.(redirect|rewrite)$/.test(text)) return 302;
-    if (/^(json|error)$/.test(text)) return statusOf(n.getArguments()[1]); // Remix/SvelteKit helpers
+    if (/^(json|error)$/.test(text)) return statusOf(n.getArguments()[1]);
   }
-  // Lambda proxy result: return { statusCode: 500, body }
   if (Node.isObjectLiteralExpression(n) && n.getProperty("statusCode")) return statusOf(n);
   return undefined;
 }
 
-/** What kind of failure a branch or catch responds to: bad signature, bad payload, or something else. */
 export function failureReason(text: string): "signature" | "validation" | "other" {
   if (/signature|constructEvent|verify|hmac|timingSafeEqual|webhook.?secret/i.test(text)) return "signature";
   if (/\b(safeParse|parse|validate|valid|invalid|schema|success|required|missing|malformed|typeof|instanceof|zod|yup|joi)\b/i.test(text) || /!\s*(req|request|event|payload|body)\.\w+/.test(text)) {
@@ -84,7 +75,6 @@ export function failureReason(text: string): "signature" | "validation" | "other
   return "other";
 }
 
-/** A call whose promise nobody awaits: a bare expression statement, `void p`, or a `.then()` chain left floating. */
 export function isFloating(call: Node): boolean {
   let n: Node = call;
   for (;;) {
@@ -94,7 +84,6 @@ export function isFloating(call: Node): boolean {
       n = p;
       continue;
     }
-    // x.then(...).catch(...) as a statement
     if (Node.isPropertyAccessExpression(p) && ["then", "catch", "finally"].includes(p.getName())) {
       const outer = p.getParent();
       if (outer && Node.isCallExpression(outer)) {

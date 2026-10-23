@@ -5,7 +5,6 @@ import { analyze } from "../src";
 
 const FIXTURES = path.resolve(__dirname, "../../../fixtures");
 
-/** Collect `// expect: <rule>` markers as "rule file:line". */
 function expectedFindings(root: string): string[] {
   const out: string[] = [];
   const visit = (dir: string) => {

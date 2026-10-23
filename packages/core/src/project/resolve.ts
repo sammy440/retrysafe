@@ -8,15 +8,12 @@ export type CallTarget =
   | {
       kind: "external";
       module: string;
-      /** Member chain after the resolved receiver, e.g. ["order", "create"] for prisma.order.create. */
       chain: string[];
-      /** True when the receiver is a callback parameter of a transaction call (prisma.$transaction(tx => ...)). */
       viaTransaction: boolean;
     }
   | { kind: "local"; fn: FunctionLike; name: string }
   | { kind: "unresolved"; name: string };
 
-/** Call-like node: a regular call or a tagged template (prisma.$executeRaw`...`). */
 export type CallLike = Node & { getKind(): SyntaxKind };
 
 const TRANSACTION_METHODS = new Set(["$transaction", "transaction"]);
@@ -47,7 +44,6 @@ export function unwrap(node: Node): Node {
   return n;
 }
 
-/** Split `a.b.c` into root `a` and chain ["b", "c"]. Stops at anything that is not a property access. */
 export function flatten(expr: Node): { root: Node; chain: string[] } {
   const chain: string[] = [];
   let n = unwrap(expr);
@@ -68,10 +64,6 @@ function isProjectFile(sf: SourceFile | undefined): sf is SourceFile {
 
 type Resolved = { decl: Node } | { module: string };
 
-/**
- * Resolve an identifier to its declarations, following imports into project files.
- * Imports of packages (or files outside the project) resolve to `{ module }`.
- */
 export function resolveIdentifier(id: Node): Resolved[] {
   const symbol = id.getSymbol();
   if (!symbol) return [];
@@ -101,11 +93,6 @@ export function resolveIdentifier(id: Node): Resolved[] {
   return out;
 }
 
-/**
- * Which external module does this expression's value come from, if any?
- * `new Stripe(...)`, `nodemailer.createTransport()`, `express.Router()`, `require("pg")`, and
- * variables or imports initialized with those, all resolve to their package name.
- */
 export function moduleOf(expr: Node, seen = new Set<Node>()): { module: string; viaTransaction: boolean } | undefined {
   const n = unwrap(expr);
   if (seen.has(n)) return undefined;
@@ -143,8 +130,6 @@ function moduleOfDeclaration(decl: Node, seen: Set<Node>): { module: string; via
     return varDecl ? moduleOfDeclaration(varDecl, seen) : undefined;
   }
   if (Node.isParameterDeclaration(decl)) {
-    // A callback parameter takes the module of the call it is passed to:
-    // (req, res) in app.post(...) -> express; tx in prisma.$transaction(async (tx) => ...) -> @prisma/client.
     const fn = decl.getParent();
     const call = fn?.getParent();
     if (fn && call && Node.isCallExpression(call) && call.getArguments().includes(fn as Expression)) {
@@ -155,7 +140,6 @@ function moduleOfDeclaration(decl: Node, seen: Set<Node>): { module: string; via
         return { module: outer.module, viaTransaction: !!last && TRANSACTION_METHODS.has(last) };
       }
     }
-    // A typed parameter takes the module its type is imported from: (fastify: FastifyInstance) -> fastify.
     return typeModule(decl.getTypeNode());
   }
   if (Node.isPropertyDeclaration(decl) || Node.isPropertyAssignment(decl)) {
@@ -165,10 +149,6 @@ function moduleOfDeclaration(decl: Node, seen: Set<Node>): { module: string; via
   return undefined;
 }
 
-/**
- * For discovery: the handler a route/export/worker registers, looking through wrappers like
- * `withGuard(guard, key, handler)` or `withAuth(handler)` to their last function argument.
- */
 export function resolveHandler(expr: Node | undefined): FunctionLike | undefined {
   if (!expr) return undefined;
   const direct = resolveFunction(expr);
@@ -184,7 +164,6 @@ export function resolveHandler(expr: Node | undefined): FunctionLike | undefined
   return undefined;
 }
 
-/** Like functionFromDeclaration, also accepting `export const POST = withX(handler)`. */
 export function handlerFromDeclaration(decl: Node): FunctionLike | undefined {
   const fn = functionFromDeclaration(decl);
   if (fn) return fn;
@@ -193,7 +172,6 @@ export function handlerFromDeclaration(decl: Node): FunctionLike | undefined {
   return undefined;
 }
 
-/** Module a type annotation's name is imported from (`FastifyInstance`, `SQSEvent`, `Prisma.TransactionClient`). */
 export function typeModule(typeNode: Node | undefined): { module: string; viaTransaction: boolean } | undefined {
   if (!typeNode || !Node.isTypeReference(typeNode)) return undefined;
   let name: Node = typeNode.getTypeName();
@@ -213,7 +191,6 @@ export function functionFromDeclaration(decl: Node): FunctionLike | undefined {
       if (isFunctionLike(u)) return u;
     }
   }
-  // CommonJS: `exports.handler = async () => {}` / `module.exports.handler = ...`
   const assignment = Node.isBinaryExpression(decl) ? decl : decl.getParent();
   if (assignment && Node.isBinaryExpression(assignment) && assignment.getOperatorToken().getText() === "=") {
     const right = unwrap(assignment.getRight());
@@ -227,7 +204,6 @@ export function functionFromDeclaration(decl: Node): FunctionLike | undefined {
   return undefined;
 }
 
-/** Resolve an identifier or expression that names a function in the project. */
 export function resolveFunction(expr: Node): FunctionLike | undefined {
   const n = unwrap(expr);
   if (isFunctionLike(n)) return n;
@@ -261,7 +237,6 @@ export function resolveCall(call: CallLike): CallTarget {
   const name = callee.getText().replace(/\s+/g, "");
   const { root, chain } = flatten(callee);
 
-  // Own code first: a property access whose member resolves to a project function (object/class/namespace import).
   if (chain.length === 0) {
     const fn = resolveFunction(root);
     if (fn) return { kind: "local", fn, name };
@@ -272,7 +247,6 @@ export function resolveCall(call: CallLike): CallTarget {
 
   const m = moduleOf(root);
   if (m) return { kind: "external", module: m.module, chain, viaTransaction: m.viaTransaction };
-  // Globals declared only in lib .d.ts files (fetch) count as a module of their own.
   if (Node.isIdentifier(root) && GLOBAL_MODULES.has(root.getText())) {
     const decls = root.getSymbol()?.getDeclarations() ?? [];
     if (decls.every((d) => d.getSourceFile().isDeclarationFile())) return { kind: "external", module: `global:${root.getText()}`, chain, viaTransaction: false };
@@ -280,13 +254,11 @@ export function resolveCall(call: CallLike): CallTarget {
   return { kind: "unresolved", name };
 }
 
-/** Extract literal text from a string, template, or a const initialized with one. */
 export function textOf(node: Node | undefined): string | undefined {
   if (!node) return undefined;
   const n = unwrap(node);
   if (Node.isStringLiteral(n) || Node.isNoSubstitutionTemplateLiteral(n)) return n.getLiteralValue();
   if (Node.isTemplateExpression(n)) return n.getText().slice(1, -1);
-  // gql`...`, sql`...`, graphql`...`
   if (Node.isTaggedTemplateExpression(n)) return n.getTemplate().getText().slice(1, -1);
   if (Node.isIdentifier(n)) {
     for (const r of resolveIdentifier(n)) {

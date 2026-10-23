@@ -28,7 +28,6 @@ export function parseBaseline(json: string, source = "baseline"): Baseline {
   return data as Baseline;
 }
 
-/** Move findings recorded in the baseline from `findings` to `suppressed`. */
 export function applyBaseline(result: AnalysisResult, baseline: Baseline): AnalysisResult {
   const known = new Set(baseline.findings.map((f) => f.id));
   const findings: Finding[] = [];
@@ -46,7 +45,6 @@ export function applyBaseline(result: AnalysisResult, baseline: Baseline): Analy
   };
 }
 
-/** Baseline entries whose findings no longer occur; worth pruning with --update-baseline. */
 export function staleBaselineEntries(result: AnalysisResult, baseline: Baseline): BaselineEntry[] {
   const seen = new Set([...result.findings, ...result.suppressed.map((s) => s.finding)].map((f) => f.id));
   return baseline.findings.filter((e) => !seen.has(e.id));

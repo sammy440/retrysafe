@@ -31,14 +31,9 @@ import { builderFamily, classifyBuilder, isOutermostCall } from "../effects/buil
 import { failureReason, isFloating, responseStatus, returnedStatus } from "./http";
 import { traceKey } from "./keys";
 
-/**
- * Parameters that carry the delivery itself (request, response, event, job) rather than a service:
- * `req.text()`, `res.send()`, `job.updateProgress()` are not side effects on the outside world.
- */
 const DELIVERY_PARAM = /^(req|request|res|response|reply|ctx|context|c|event|evt|job|record|message|msg|payload|body|next)$/;
 const DELIVERY_TYPE = /^(Request|NextRequest|NextApiRequest|NextApiResponse|Response|IncomingMessage|ServerResponse|FastifyRequest|FastifyReply|Context|Job|SQSRecord|SQSEvent)\b/;
 
-/** Method names that usually mean a side effect, for calls we cannot resolve. */
 const EFFECTFUL_NAME = /^(charge|pay|refund|transfer|payout|send|email|notify|sms|publish|enqueue|dispatch|emit|create|insert|save|persist|record|credit|debit|increment|decrement|grant|provision|fulfil|fulfill|ship|post|write|upsert|add|push|award|issue)/i;
 
 export interface WalkOptions {
@@ -51,20 +46,14 @@ export interface WalkOptions {
 interface Ctx {
   depth: number;
   path: SourceLocation[];
-  /** Guards active at this point. Mutable: guards established mid-block are pushed for later statements. */
   guards: Guard[];
-  /** Call site of the enclosing transaction, if any. */
   transaction?: string;
   stack: Set<Node>;
-  /** Effects reached from here are not awaited by the handler. */
   floating?: boolean;
-  /** Inside an in-code retry wrapper or loop. */
   retry?: SourceLocation;
-  /** Branch lineage (see Effect.branch). */
   branch: string[];
 }
 
-/** Is the node inside a `try { ... }` block (not its catch/finally) within its own function? */
 function insideTryBlock(node: Node): boolean {
   for (let a = node.getParent(), prev: Node = node; a && !isFunctionLike(a); prev = a, a = a.getParent()) {
     if (Node.isTryStatement(a) && a.getTryBlock() === prev) return true;
@@ -72,7 +61,6 @@ function insideTryBlock(node: Node): boolean {
   return false;
 }
 
-/** Keys of the object a write sets: Prisma `data`, Mongoose `$set`, or the object itself. */
 function writeFields(arg: Node | undefined): string[] | undefined {
   const o = arg && unwrap(arg);
   if (!o || !Node.isObjectLiteralExpression(o)) return undefined;
@@ -83,9 +71,7 @@ function writeFields(arg: Node | undefined): string[] | undefined {
   return objectKeys(o);
 }
 
-/** Libraries that re-run a function on failure. */
 const RETRY_MODULES = new Set(["p-retry", "async-retry", "promise-retry", "exponential-backoff", "ts-retry-promise", "@lifeomic/attempt", "retry"]);
-/** Calls that run their callback later, unawaited. */
 const DETACHED = new Set(["setTimeout", "setImmediate", "nextTick", "queueMicrotask", "forEach"]);
 
 export interface WalkResult {
@@ -110,7 +96,6 @@ function argsOf(call: CallLike): Node[] {
   return [];
 }
 
-/** The expression passed as the idempotency key option, if it is visible. */
 function keyExpression(call: CallLike, arg: number, field: string): Node | undefined {
   const o = argsOf(call)[arg];
   const u = o && unwrap(o);
@@ -126,17 +111,9 @@ function hasKey(call: CallLike, arg: number, field: string): boolean {
   const o = a && unwrap(a);
   if (!o) return false;
   if (Node.isObjectLiteralExpression(o)) return !!o.getProperty(field) || o.getProperties().some((p) => Node.isSpreadAssignment(p));
-  // A variable or call we cannot see into: assume the caller may pass the key.
   return !Node.isNullLiteral(o) && o.getText() !== "undefined";
 }
 
-/**
- * Walks a handler in execution order, following calls into project code to a bounded depth,
- * and records effects, guards, and checks along with the guards active on each path.
- *
- * Dominance is approximated structurally: a guard covers the statements after it in its own
- * block (and everything nested in them), or the branch it gates. A full CFG replaces this later.
- */
 export class Walker {
   private effects: Effect[] = [];
   private guards: Guard[] = [];
@@ -151,7 +128,6 @@ export class Walker {
 
   constructor(private opts: WalkOptions) {}
 
-  /** Walk middleware (in order) then the handler; guards a middleware establishes before `next()` cover the handler. */
   run(fn: FunctionLike, middleware: FunctionLike[] = [], middlewareGuards: { node: Node; guard: GuardPrimitive }[] = []): WalkResult {
     const guards: Guard[] = middlewareGuards.map((m) => this.recordGuard(m.node, m.guard, { depth: 0, path: [], guards: [], stack: new Set(), branch: [] }));
     for (const mw of middleware) {
@@ -179,7 +155,6 @@ export class Walker {
     return nodes.flatMap((n) => traceKey(n, (x) => this.loc(x)));
   }
 
-  /** Walk a function body; returns guards it establishes unconditionally at its top level. */
   private walkFunction(fn: FunctionLike, ctx: Ctx): Guard[] {
     const body = fn.getBody();
     if (!body) return [];
@@ -197,7 +172,6 @@ export class Walker {
   }
 
   private walk(node: Node, ctx: Ctx): void {
-    // Nested declarations run only when called; calls are followed explicitly.
     if (Node.isFunctionDeclaration(node) || Node.isClassDeclaration(node) || Node.isInterfaceDeclaration(node) || Node.isTypeAliasDeclaration(node)) {
       return;
     }
@@ -222,14 +196,12 @@ export class Walker {
     }
     if (Node.isThrowStatement(node)) {
       node.forEachChild((c) => this.walk(c, ctx));
-      // An uncaught throw in the handler body becomes a 500 from the framework.
       if (ctx.depth === 0 && !insideTryBlock(node)) {
         this.pushResponse(node, 500, ctx, true);
       }
       return;
     }
     if (Node.isForStatement(node) || Node.isWhileStatement(node) || Node.isDoStatement(node)) {
-      // for (attempt = 0; attempt < 3; attempt++) { try { await charge(); break; } catch {} }
       const body = node.getStatement();
       const isRetryLoop = body.getDescendantsOfKind(SyntaxKind.TryStatement).some((t) =>
         t.getTryBlock().getDescendants().some((d) => Node.isBreakStatement(d) || Node.isReturnStatement(d)),
@@ -238,7 +210,6 @@ export class Walker {
       return;
     }
     if (Node.isCaseClause(node) || Node.isDefaultClause(node)) {
-      // Each case is its own scope: a guard in one case does not cover the others or the code after the switch.
       this.walkStatements(node.getStatements(), { ...ctx, branch: [...ctx.branch, `case@${node.getStart()}`] });
       return;
     }
@@ -253,18 +224,12 @@ export class Walker {
       return;
     }
     if (Node.isArrowFunction(node) || Node.isFunctionExpression(node)) {
-      // Inline callbacks (array.map, transaction bodies, ...) are assumed to run where they appear.
       this.walkFunction(node, { ...ctx, guards: [...ctx.guards] });
       return;
     }
     node.forEachChild((child) => this.walk(child, ctx));
   }
 
-  /**
-   * try { claim; work } catch { return } : guards established in the try block also cover the code after
-   * the try statement when every path through the catch leaves the block (a duplicate never falls through),
-   * or when there is no catch (the error propagates).
-   */
   private walkTry(stmt: TryStatement, ctx: Ctx): void {
     const effectsBefore = this.effects.length;
     const established = this.walkStatements(stmt.getTryBlock().getStatements(), ctx);
@@ -301,13 +266,11 @@ export class Walker {
     const inThen = (c: Ctx): Ctx => ({ ...c, branch: [...ctx.branch, `${id}:then`] });
     const inElse = (c: Ctx): Ctx => ({ ...c, branch: [...ctx.branch, `${id}:else`] });
 
-    // Does a duplicate delivery make this condition true (take `then`) or false (take `else`)?
     let dupTakesThen: boolean | undefined;
     if (found && found.guard.duplicateWhen !== "unknown") {
       const t = truthWhenTruthy(cond);
       dupTakesThen = t === undefined ? undefined : found.guard.duplicateWhen === "truthy" ? t : !t;
     }
-    // `if (!user) return 404;` after a lookup is a not-found check, not a dedupe check.
     const notFoundCheck = dupTakesThen === false && exits(thenStmt) && !elseStmt;
     if (!found || notFoundCheck) {
       this.walk(thenStmt, inThen(ctx));
@@ -318,20 +281,17 @@ export class Walker {
     const guarded: Ctx = { ...ctx, guards: [...ctx.guards, guard] };
 
     if (dupTakesThen === false) {
-      // if (claimed) { ...work... }  /  if (!existing) { ...work... }
       this.walk(thenStmt, inThen(guarded));
       if (elseStmt) this.walk(elseStmt, inElse(ctx));
       if (exits(elseStmt)) ctx.guards.push(guard);
       return;
     }
-    // dupTakesThen true: if (existing) return;  undefined: polarity unknown, assume the usual early-exit shape.
     const thenExits = exits(thenStmt);
     this.walk(thenStmt, inThen(dupTakesThen === undefined && !thenExits ? guarded : ctx));
     if (elseStmt) this.walk(elseStmt, inElse(guarded));
     if (thenExits) ctx.guards.push(guard);
   }
 
-  /** Find a dedupe primitive whose result feeds this condition, directly or through a local variable. */
   private checkedGuard(cond: Node, ctx: Ctx): { node: Node; guard: GuardPrimitive } | undefined {
     const calls: CallLike[] = [];
     const collect = (n: Node) => {
@@ -357,7 +317,6 @@ export class Walker {
     return undefined;
   }
 
-  /** A guard primitive in this call, or inside the project function it calls (bounded). */
   private primitiveDeep(call: CallLike, depth: number, seen: Set<Node>): GuardPrimitive | undefined {
     const target = resolveCall(call);
     const direct = guardPrimitive(call, target, this.opts.customGuards);
@@ -413,7 +372,6 @@ export class Walker {
     this.responses.push({ status, location: this.loc(node), order: this.order++, depth: ctx.depth, reason: this.branchReason(node), implicit, topLevel });
   }
 
-  /** The failure an enclosing `if` or `catch` (within the same function) is handling. */
   private branchReason(node: Node): ResponseInfo["reason"] {
     for (let a = node.getParent(); a && !isFunctionLike(a); a = a.getParent()) {
       if (Node.isCatchClause(a)) {
@@ -435,7 +393,6 @@ export class Walker {
     const isTransaction =
       target.kind === "external" && ["$transaction", "transaction"].includes(target.chain[target.chain.length - 1] ?? "");
 
-    // Callee sub-expressions and arguments are evaluated (and callbacks typically run) around the call.
     const callee = calleeOf(call);
     if (!Node.isIdentifier(callee)) callee.forEachChild((c) => this.walk(c, ctx));
 
@@ -446,13 +403,11 @@ export class Walker {
     if (target.kind === "external" && RETRY_MODULES.has(target.module)) argCtx = { ...argCtx, retry: argCtx.retry ?? loc };
     if (custom) {
       argCtx = { ...argCtx, guards: [...argCtx.guards, this.recordGuard(call, custom, ctx)] };
-      // Database guards run the callback inside the claim's transaction.
       if (library?.transactional) argCtx = { ...argCtx, transaction: `${loc.file}:${loc.line}:${loc.column}` };
     }
     for (const arg of argsOf(call)) this.walk(arg, argCtx);
 
     if (custom) {
-      // A bare configured guard (not wrapping a callback) is trusted to stop duplicates itself.
       if (!argsOf(call).some((a) => isFunctionLike(unwrap(a)))) ctx.guards.push(this.recordGuard(call, custom, ctx));
       return;
     }
@@ -500,7 +455,6 @@ export class Walker {
     }
     if (target.kind !== "external") return;
     const { module, chain } = target;
-    // A `tx` parameter used outside the walked callback (passed into a helper) still means "inside a transaction".
     const effectCtx: Ctx = { ...ctx, transaction: ctx.transaction ?? (target.viaTransaction ? "(transaction parameter)" : undefined) };
 
     const verify = findEntry(VERIFY_CATALOG, module, chain);
@@ -534,7 +488,6 @@ export class Walker {
       });
     }
 
-    // Query builders (Drizzle, Knex, Mongoose): classify the whole chain once, at its outermost call.
     const family = builderFamily(module);
     if (family) {
       if (!isOutermostCall(call)) return;
@@ -547,7 +500,6 @@ export class Walker {
       return;
     }
 
-    // AWS SDK v3: client.send(new XCommand(input))
     if (module.startsWith("@aws-sdk/") && chain[chain.length - 1] === "send") {
       const a = classifyAwsSend(call);
       if (a?.type === "guard") {
@@ -597,15 +549,10 @@ export class Walker {
     );
   }
 
-  /**
-   * A call we cannot resolve (dependency injection, untyped parameters, `this.service.x()`) whose method
-   * name suggests a side effect becomes an unknown effect, reported only at low confidence.
-   */
   private unresolvedEffect(call: CallLike, ctx: Ctx): void {
     const { root, chain } = flatten(calleeOf(call));
     const method = chain[chain.length - 1];
     if (!method || !EFFECTFUL_NAME.test(method)) return;
-    // Only receivers that come from outside the walked code: parameters, `this`, or their properties.
     const param = Node.isIdentifier(root)
       ? resolveIdentifier(root)
           .map((r) => ("decl" in r && Node.isParameterDeclaration(r.decl) ? r.decl : undefined))
@@ -624,10 +571,6 @@ export class Walker {
     });
   }
 
-  /**
-   * Config effects can name project code ({ module: "@/lib/billing", callee: "chargeCustomer" }). The module
-   * matches the import specifier at the call site or the function's project path, with or without extension.
-   */
   private configuredLocalEffect(call: CallLike, fn: FunctionLike): EffectCatalogEntry | undefined {
     if (!this.opts.extraEffects.length) return undefined;
     const { root, chain } = flatten(calleeOf(call));

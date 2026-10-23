@@ -150,7 +150,6 @@ async function main(argv: string[]): Promise<number> {
   const isFix = command === "fix";
   const root = resolveRoot(command === "explain" || command === "verify" ? rest[1] : isFix ? rest[0] : command);
 
-  // Config file, then CLI flags.
   const configPath = values.config ? path.resolve(values.config) : findConfig(root);
   if (values.config && !existsSync(configPath!)) fail(`config file not found: ${values.config}`);
   const config: RetrysafeConfig = configPath ? await loadConfig(configPath) : {};
@@ -218,7 +217,6 @@ async function main(argv: string[]): Promise<number> {
           object: "event",
           type: report.eventTypes[0] ?? "test.event",
           created: 1_700_000_000,
-          // Covers common payload shapes (Stripe data.object, Paystack/Flutterwave data.*) so handlers get past field reads.
           data: {
             id: "obj_retrysafe_1",
             reference: "ref_retrysafe_1",
@@ -229,7 +227,6 @@ async function main(argv: string[]): Promise<number> {
             metadata: { userId: "user_retrysafe_1", orderId: "order_retrysafe_1" },
             object: { id: "obj_retrysafe_1", customer: "cus_retrysafe_1", amount: 1000, email: "test@example.com", customer_email: "test@example.com", metadata: {} },
           },
-          // GitHub, PayPal, and generic shapes.
           repository: { full_name: "octo/repo", id: 1 },
           sender: { login: "octocat" },
           resource: { id: "res_retrysafe_1", amount: 1000, user: "user_retrysafe_1" },
@@ -239,7 +236,6 @@ async function main(argv: string[]): Promise<number> {
     const { renderVerify, runVerify } = await import("./verify/index");
     const v = await runVerify({ root, result, report, payload, headers, env: pairs(values.env), concurrent: !values.quick, crashSweep: !values.quick });
     write(format === "json" ? `${JSON.stringify(v, null, 2)}\n` : `${renderVerify(v)}\n`);
-    // Loaded user modules may leave timers or connections open.
     process.exit(v.scenarios.some((s) => s.repeated.length || s.lost.length) && values.ci ? 1 : 0);
   }
 
@@ -271,7 +267,6 @@ async function main(argv: string[]): Promise<number> {
   return values.ci && failing.length > 0 ? 1 : 0;
 }
 
-/** Files changed since a ref (or staged), relative to `root`. */
 function changedFiles(root: string, opts: { since: string } | { staged: true }): string[] {
   const git = (args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   let out: string;
@@ -281,7 +276,6 @@ function changedFiles(root: string, opts: { since: string } | { staged: true }):
     if ("staged" in opts) {
       out = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]);
     } else {
-      // Working tree vs the merge-base: the branch's own changes, committed or not.
       const base = git(["merge-base", opts.since, "HEAD"]).trim();
       out = git(["diff", "--name-only", "--diff-filter=ACMR", base]);
     }

@@ -5,7 +5,6 @@ import type { Candidate } from "./types";
 
 export class HandlerConfigError extends Error {}
 
-/** Handlers listed in config as "path/to/file.ts#exportName" (or "#default"). */
 export function discoverConfigured(loaded: LoadedProject, entries: string[]): Candidate[] {
   const out: Candidate[] = [];
   for (const entry of entries) {

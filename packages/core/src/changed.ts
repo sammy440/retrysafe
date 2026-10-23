@@ -1,6 +1,5 @@
 import type { AnalysisResult, HandlerReport } from "./types";
 
-/** Every file a handler's analysis touched: the handler, its call paths, effects, guards, and records. */
 export function handlerFiles(h: HandlerReport): Set<string> {
   const files = new Set<string>([h.handler.location.file]);
   for (const e of h.effects) {
@@ -16,7 +15,6 @@ export function handlerFiles(h: HandlerReport): Set<string> {
   return files;
 }
 
-/** Keep only handlers affected by a change to any of `files` (paths relative to the analyzed root). */
 export function filterByChangedFiles(result: AnalysisResult, files: Iterable<string>): AnalysisResult {
   const changed = new Set([...files].map((f) => f.split("\\").join("/")));
   const handlers = result.handlers.filter((h) => [...handlerFiles(h)].some((f) => changed.has(f)));

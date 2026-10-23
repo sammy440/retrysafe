@@ -1,7 +1,6 @@
 import type { HandlerReport } from "../types";
 import { at, type Rule, type RuleFinding } from "./shared";
 
-/** In-code retry around a non-idempotent call: a timeout after the provider succeeded is retried into a duplicate. */
 export const retryLoopWithEffect: Rule = {
   id: "retry-loop-with-effect",
   severity: "warning",

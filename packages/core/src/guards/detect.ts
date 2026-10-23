@@ -10,22 +10,14 @@ export interface GuardPrimitive {
   kind: GuardKind;
   atomic: boolean | "unknown";
   description: string;
-  /**
-   * true if the call alone stops a duplicate (e.g. an insert into a unique processed-events table
-   * throws on conflict). false if the result must be checked with an early exit to protect anything.
-   */
   selfGuarding: boolean;
-  /** Which result value signals a duplicate: a lookup finds a row (truthy); SET NX / conflict-ignoring insert returns null or 0 (falsy). */
   duplicateWhen: "truthy" | "falsy" | "unknown";
-  /** Expressions the dedupe key is built from, for key-source tracking. */
   keyNodes?: Node[];
-  /** Table/model the guard reads or writes, and the columns it sets or filters on (for schema checks). */
   table?: string;
   columns?: string[];
   ttlSeconds?: number;
 }
 
-/** Expiry set on a Redis write: SET k v EX n / PX n / { EX: n } / { ex: n }, or SETEX k n v. */
 export function redisTtl(method: string, args: Node[]): number | undefined {
   if (method.toLowerCase() === "setex") return evalNumber(args[1]);
   for (let i = 2; i < args.length; i++) {
@@ -47,7 +39,6 @@ export function redisTtl(method: string, args: Node[]): number | undefined {
   return undefined;
 }
 
-/** Property names of an object literal (data, where, values, documents). */
 export function objectKeys(node: Node | undefined): string[] | undefined {
   const o = node && unwrap(node);
   if (!o) return undefined;
@@ -57,7 +48,6 @@ export function objectKeys(node: Node | undefined): string[] | undefined {
 }
 
 export interface CustomGuard {
-  /** Callee text to match, e.g. "withIdempotency" or "dedupe.once". */
   callee: string;
   keyArg?: number;
   atomic?: boolean;
@@ -81,10 +71,6 @@ function objectProp(obj: Node | undefined, name: string): Node | undefined {
 const KEY_FIELD = /^(id|key)$|key$|id$|_id$/i;
 const TIMESTAMP_FIELD = /(at|_at|date|time|timestamp|expires?)$/i;
 
-/**
- * The fields of a record that form its dedupe key. Prefer id/key-like fields; otherwise everything
- * except timestamps, which are expected to differ between deliveries.
- */
 function keyFields(obj: Node | undefined): Node[] {
   const o = obj && unwrap(obj);
   if (!o) return [];
@@ -97,7 +83,6 @@ function keyFields(obj: Node | undefined): Node[] {
   return chosen.map(value).filter((n): n is Node => !!n);
 }
 
-/** SQL parameters minus those bound to timestamp columns, when the INSERT column list lines up with them. */
 function sqlKeyParams(sql: string, params: Node | undefined): Node[] {
   const p = params && unwrap(params);
   if (!p) return [];
@@ -124,7 +109,6 @@ export function matchCustomGuard(call: CallLike, guards: CustomGuard[]): CustomG
   return guards.find((g) => text === g.callee || text.endsWith(`.${g.callee}`));
 }
 
-/** Is this call, by itself, a dedupe primitive? */
 export function guardPrimitive(call: CallLike, target: CallTarget, custom: CustomGuard[]): GuardPrimitive | undefined {
   const customGuard = matchCustomGuard(call, custom);
   if (customGuard) {
@@ -214,7 +198,6 @@ function sqlGuard(sql: string | undefined, paramsArg: Node | undefined): GuardPr
       kind: "unique-insert",
       atomic: ignoresConflict ? true : "unknown",
       description: `insert into ${table}`,
-      // ON CONFLICT DO NOTHING never throws, so the row count must be checked.
       selfGuarding: !ignoresConflict,
       duplicateWhen: "falsy",
       keyNodes: params,
@@ -228,15 +211,10 @@ function sqlGuard(sql: string | undefined, paramsArg: Node | undefined): GuardPr
 export const GUARD_LIBRARY = "@retrysafe/guard";
 const GUARD_ADAPTERS = new Set(["withGuard", "withGuardRoute", "withGuardJob"]);
 
-/**
- * `guard.run(key, fn)` from @retrysafe/guard: `fn` runs once per key. Database guards (postgresGuard,
- * prismaGuard) also run `fn` inside the claim's transaction.
- */
 export function guardLibraryRun(call: CallLike, target: CallTarget): (GuardPrimitive & { transactional: boolean }) | undefined {
   if (target.kind !== "external" || target.module !== GUARD_LIBRARY || target.chain[target.chain.length - 1] !== "run") return undefined;
   const callee = calleeOf(call);
   const receiver = Node.isPropertyAccessExpression(callee) ? callee.getExpression() : callee;
-  // const guard = postgresGuard(pool)  ->  "postgresGuard"
   let factory = "guard";
   const sym = Node.isIdentifier(receiver) ? receiver.getSymbol() : undefined;
   for (const d of (sym?.isAlias() ? sym.getAliasedSymbol() : sym)?.getDeclarations() ?? []) {
@@ -255,7 +233,6 @@ export function guardLibraryRun(call: CallLike, target: CallTarget): (GuardPrimi
   };
 }
 
-/** withGuard / withGuardRoute / withGuardJob(guard, getKey, handler) wrapping a handler function. */
 export function guardLibraryAdapter(call: Node): GuardPrimitive | undefined {
   if (!Node.isCallExpression(call)) return undefined;
   const callee = call.getExpression();
@@ -276,7 +253,6 @@ function resolveImportModule(n: Node): string | undefined {
   return undefined;
 }
 
-/** A later write that marks the event handled without claiming it (redis SET without NX, update of a processed-events row). */
 export function markerWrite(call: CallLike, target: CallTarget): string | undefined {
   if (target.kind !== "external") return undefined;
   const { module, chain } = target;
@@ -290,7 +266,6 @@ export function markerWrite(call: CallLike, target: CallTarget): string | undefi
   return undefined;
 }
 
-/** A call that undoes a claim: redis DEL, deleting the processed-events row. Only meaningful inside a catch block. */
 export function releaseCall(call: CallLike, target: CallTarget): boolean {
   if (target.kind !== "external") return false;
   const { module, chain } = target;
@@ -307,7 +282,6 @@ export function releaseCall(call: CallLike, target: CallTarget): boolean {
   return false;
 }
 
-/** A statement that unconditionally leaves the enclosing block (return, throw, continue, break). */
 export function exits(stmt: Node | undefined): boolean {
   if (!stmt) return false;
   if (Node.isReturnStatement(stmt) || Node.isThrowStatement(stmt) || Node.isContinueStatement(stmt) || Node.isBreakStatement(stmt)) {
@@ -320,10 +294,6 @@ export function exits(stmt: Node | undefined): boolean {
 
 const FALSY_LITERALS = new Set(["null", "undefined", "0", "false", '""', "''"]);
 
-/**
- * Is `cond` true when the tracked value inside it is truthy? Handles `x`, `!x`, `x === null`,
- * `x !== null`, `count > 0`, `rowCount === 0`, ... Returns undefined when it cannot tell.
- */
 export function truthWhenTruthy(cond: Node): boolean | undefined {
   const e = unwrap(cond);
   if (Node.isPrefixUnaryExpression(e) && e.getOperatorToken() === SyntaxKind.ExclamationToken) {
@@ -337,7 +307,6 @@ export function truthWhenTruthy(cond: Node): boolean | undefined {
     const OK = /^["'`]OK["'`]$/i;
     const literal = FALSY_LITERALS.has(right) || OK.test(right) ? right : FALSY_LITERALS.has(left) || OK.test(left) ? left : undefined;
     if (literal !== undefined) {
-      // `x === null` is true when x is falsy; `x === "OK"` is true when x is truthy.
       const eqWhenTruthy = OK.test(literal);
       if (op === "===" || op === "==") return eqWhenTruthy;
       if (op === "!==" || op === "!=") return !eqWhenTruthy;

@@ -3,7 +3,6 @@ import type { Rule, RuleFinding } from "./shared";
 
 const STATE_FIELD = /^(status|state|stage|phase|plan|tier|active|isActive|cancel\w*|subscriptionStatus|paymentStatus)$/i;
 
-/** State overwritten from several event types with no version or timestamp check. */
 export const orderDependenceAssumed: Rule = {
   id: "order-dependence-assumed",
   severity: "info",

@@ -4,7 +4,6 @@ import { textOf, unwrap, type CallLike } from "../project/resolve";
 import type { EffectKind } from "../types";
 import { DEDUPE_NAME } from "./catalog";
 
-/** Query builders whose effects are spread across a call chain. */
 export function builderFamily(module: string): "drizzle" | "knex" | "mongoose" | undefined {
   if (module === "drizzle-orm" || module.startsWith("drizzle-orm/")) return "drizzle";
   if (module === "knex") return "knex";
@@ -12,10 +11,8 @@ export function builderFamily(module: string): "drizzle" | "knex" | "mongoose" |
   return undefined;
 }
 
-/** True if this call is not itself the receiver of a further `.method()` call. */
 export function isOutermostCall(call: Node): boolean {
   let n: Node = call;
-  // Look through `await` and parentheses: (await x.find()).foo is a property read, not a chain.
   const parent = n.getParent();
   if (!parent || !Node.isPropertyAccessExpression(parent) || parent.getExpression() !== n) return true;
   n = parent;
@@ -28,7 +25,6 @@ interface Segment {
   args: Node[];
 }
 
-/** Method calls from the root outward: db.insert(t).values(v) -> [insert(t), values(v)]; plus the chain root. */
 export function chainSegments(call: CallLike): { root: Node; segments: Segment[] } {
   const segments: Segment[] = [];
   let n: Node = call;
@@ -37,7 +33,6 @@ export function chainSegments(call: CallLike): { root: Node; segments: Segment[]
     if (!Node.isPropertyAccessExpression(callee)) break;
     segments.unshift({ name: callee.getName(), args: n.getArguments() });
     n = unwrap(callee.getExpression());
-    // Property hops without a call (db.query.users.findFirst) belong to the chain too.
     while (Node.isPropertyAccessExpression(n)) {
       segments.unshift({ name: n.getName(), args: [] });
       n = unwrap(n.getExpression());
@@ -75,7 +70,6 @@ function argText(segs: Segment[], name: string, index = 0): string {
   return segs.find((s) => s.name === name)?.args[index]?.getText() ?? "";
 }
 
-/** Classify a whole builder chain, called on its outermost call. */
 export function classifyBuilder(family: "drizzle" | "knex" | "mongoose", call: CallLike): BuilderResult {
   const r = classifyChain(family, call);
   if (r.type !== "effect") return r;
@@ -141,7 +135,6 @@ function classifyChain(family: "drizzle" | "knex" | "mongoose", call: CallLike):
     return { type: "none" };
   }
 
-  // mongoose: Model.create(...), new Model(doc).save(), Model.updateOne(filter, update, { upsert })
   const modelNode = Node.isNewExpression(root) ? root.getExpression() : root;
   const model = modelNode.getText();
   const dedupe = DEDUPE_NAME.test(model);

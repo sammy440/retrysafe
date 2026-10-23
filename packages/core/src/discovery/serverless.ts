@@ -3,7 +3,6 @@ import { Node, SyntaxKind, type SourceFile } from "ts-morph";
 import { flatten, handlerFromDeclaration, moduleOf, resolveHandler, typeModule, unwrap, type FunctionLike } from "../project/resolve";
 import type { Candidate } from "./types";
 
-/** aws-lambda event types for sources that deliver at least once. */
 const AT_LEAST_ONCE_EVENTS: Record<string, string> = {
   SQSEvent: "SQS",
   SNSEvent: "SNS",
@@ -26,7 +25,6 @@ function typeName(node: Node | undefined): string | undefined {
   return node.getTypeName().getText().split(".").pop();
 }
 
-/** Which event source a Lambda function consumes, from its parameter or variable type, or `event.Records` usage. */
 function eventSource(fn: FunctionLike, declType: Node | undefined): string | undefined {
   const fromDecl = typeName(declType);
   if (fromDecl && AT_LEAST_ONCE_EVENTS[fromDecl] && typeModule(declType)?.module === "aws-lambda") return AT_LEAST_ONCE_EVENTS[fromDecl];
@@ -34,7 +32,6 @@ function eventSource(fn: FunctionLike, declType: Node | undefined): string | und
   const paramType = param && Node.isParameterDeclaration(param) ? param.getTypeNode() : undefined;
   const fromParam = typeName(paramType);
   if (fromParam && AT_LEAST_ONCE_EVENTS[fromParam] && typeModule(paramType)?.module === "aws-lambda") return AT_LEAST_ONCE_EVENTS[fromParam];
-  // Untyped JS: iterating `event.Records` is the batch-delivery shape shared by SQS, SNS, Kinesis, DynamoDB, S3.
   if (param && Node.isParameterDeclaration(param)) {
     const name = param.getName();
     const usesRecords = fn
@@ -69,7 +66,6 @@ export function discoverServerless(files: SourceFile[], root: string): Candidate
       }
     }
 
-    // sqs-consumer: Consumer.create({ queueUrl, handleMessage | handleMessageBatch })
     for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const callee = call.getExpression();
       const { chain } = flatten(callee);

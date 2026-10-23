@@ -24,7 +24,6 @@ describe("inline suppressions", () => {
   it("honors a suppression with a reason, on the line or the line above", () => {
     const same = run({ [ROUTE]: route(`  await send(event.email);`) });
     expect(same.findings).toHaveLength(1);
-    // The flagged line is the sendMail call in lib/mail.ts.
     const suppressedMail = project({ [ROUTE]: route(`  await send(event.email);`) });
     suppressedMail
       .getSourceFileOrThrow("/lib/mail.ts")

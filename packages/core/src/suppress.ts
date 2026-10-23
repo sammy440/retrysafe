@@ -1,13 +1,5 @@
 import type { Finding, SuppressedFinding } from "./types";
 
-/**
- * Inline suppression comments, on the flagged line or the line above:
- *
- *   await sendEmail(); // retrysafe-ignore unguarded-side-effect -- emails are deduplicated by the ESP
- *   // retrysafe-ignore-next-line nondeterministic-key, effect-missing-idempotency-key -- test-only route
- *
- * A reason after `--` is required; a suppression without one is not honored.
- */
 const PATTERN = /retrysafe-ignore(-next-line)?\s+([\w*-]+(?:\s*,\s*[\w*-]+)*)(?:\s+--\s*(.*?))?\s*(?:\*\/)?\s*$/;
 
 interface Suppression {
@@ -21,7 +13,6 @@ function parse(line: string | undefined, nextLine: boolean): Suppression | undef
   return { rules: m[2]!.split(",").map((r) => r.trim()), reason: (m[3] ?? "").trim() };
 }
 
-/** Split findings into active and inline-suppressed, given a way to read source lines. */
 export function applyInlineSuppressions(
   findings: Finding[],
   lineOf: (file: string, line: number) => string | undefined,

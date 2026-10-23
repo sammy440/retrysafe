@@ -18,9 +18,7 @@ import { unifiedDiff } from "./diff";
 
 export interface FixOptions extends AnalyzeOptions {
   root: string;
-  /** Guard instance to wrap handlers with: "<module>#<export>", e.g. "@/lib/guard#guard" or "./src/lib/guard#guard". */
   guard?: string;
-  /** Only fix these rules. */
   onlyRules?: string[];
 }
 
@@ -28,7 +26,6 @@ export interface FixResult {
   applied: { rule: string; file: string; line: number; description: string }[];
   skipped: { rule: string; file: string; line: number; reason: string }[];
   diffs: { file: string; diff: string; after: string }[];
-  /** Absolute paths of changed files with their new contents (written only with --write). */
   changes: Map<string, string>;
 }
 
@@ -38,7 +35,6 @@ const WRAPPABLE = new Set(["express", "fastify", "next-app-router", "next-pages-
 
 interface Planned {
   file: SourceFile;
-  /** Position used to order edits bottom-up and to re-find nodes when applying. */
   pos: number;
   finding: Finding;
   description: string;
@@ -49,7 +45,6 @@ function posOf(sf: SourceFile, loc: SourceLocation): number {
   return sf.compilerNode.getPositionOfLineAndCharacter(loc.line - 1, loc.column - 1);
 }
 
-/** The outermost node of `kind` that starts exactly at `pos`. */
 function nodeAt<T extends Node>(sf: SourceFile, pos: number, pred: (n: Node) => n is T): T | undefined {
   let n: Node | undefined = sf.getDescendantAtPos(pos);
   let found: T | undefined;
@@ -60,13 +55,9 @@ function nodeAt<T extends Node>(sf: SourceFile, pos: number, pred: (n: Node) => 
   return found;
 }
 
-/** How to derive this handler's event key, and the raw id for idempotency keys on effects. */
 interface EventId {
-  /** Expression for guard.run's key, e.g. `eventKey.stripe(event)`. */
   key: string;
-  /** Expression for an id inside a template, e.g. `event.id`; undefined when only header-based. */
   raw?: string;
-  /** The key is only valid after this position (the event variable's declaration). */
   after: number;
 }
 
@@ -78,7 +69,6 @@ function paramName(fn: FunctionLike, i: number): string | undefined {
 function eventIdFor(fn: FunctionLike, report: HandlerReport): EventId | undefined {
   const body = fn.getBody();
   if (!body) return undefined;
-  // const event = stripe.webhooks.constructEvent(...)
   for (const decl of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     if (decl.getFirstAncestor(isFunctionLike) !== fn) continue;
     const init = decl.getInitializer();
@@ -114,7 +104,6 @@ function addNamedImport(sf: SourceFile, module: string, name: string): void {
   sf.addImportDeclaration({ moduleSpecifier: module, namedImports: [name] });
 }
 
-/** Module specifier for the guard as seen from `sf`: relative paths are rebased, aliases kept verbatim. */
 function guardSpecifier(sf: SourceFile, root: string, module: string): string {
   if (!module.startsWith(".")) return module;
   const abs = path.resolve(root, module);
@@ -123,7 +112,6 @@ function guardSpecifier(sf: SourceFile, root: string, module: string): string {
   return rel;
 }
 
-/** "postgresGuard" | "prismaGuard" | "redisGuard" | ..., read from the guard module's export, when it is in the project. */
 function guardFactory(files: SourceFile[], root: string, module: string, exportName: string): string | undefined {
   if (!module.startsWith(".")) return undefined;
   const base = path.resolve(root, module).replace(/\.[cm]?[jt]sx?$/, "");
@@ -134,7 +122,6 @@ function guardFactory(files: SourceFile[], root: string, module: string, exportN
   return u && Node.isCallExpression(u) ? u.getExpression().getText().split(".").pop() : undefined;
 }
 
-/** The project's indentation, from the first indented line of its files. */
 function detectIndent(files: SourceFile[]): IndentationText {
   for (const f of files.slice(0, 20)) {
     const m = f.getFullText().match(/\n([ \t]+)\S/);
@@ -145,7 +132,6 @@ function detectIndent(files: SourceFile[]): IndentationText {
   return IndentationText.TwoSpaces;
 }
 
-/** A statement's text with its original indentation removed from continuation lines. */
 function dedented(node: Node): string {
   const sf = node.getSourceFile();
   const col = sf.getLineAndColumnAtPos(node.getStart()).column - 1;
@@ -162,7 +148,6 @@ function hasReturn(nodes: Node[]): boolean {
   return nodes.some((s) => Node.isReturnStatement(s) || s.getDescendantsOfKind(SyntaxKind.ReturnStatement).some((r) => r.getFirstAncestor(isFunctionLike) === s.getFirstAncestor(isFunctionLike)));
 }
 
-/** Plan and apply fixes in memory; nothing is written. */
 export function runFix(opts: FixOptions): FixResult {
   const projects = loadProjects(opts.root, opts.tsconfig);
   const results = projects.map((p) => analyzeLoaded(p, opts));
@@ -190,7 +175,6 @@ export function runFix(opts: FixOptions): FixResult {
       const sf = fileOf(f.location.file);
       if (!sf) continue;
 
-      // 1. permanent failures answered with 5xx -> 400
       if (f.rule === "permanent-error-returns-5xx") {
         const pos = posOf(sf, f.location);
         planned.push({
@@ -217,7 +201,6 @@ export function runFix(opts: FixOptions): FixResult {
         continue;
       }
 
-      // 2. idempotency key / job id on the call itself
       const e = f.effect;
       if (KEY_RULES.has(f.rule) && e?.acceptsIdempotencyKey && !e.hasIdempotencyKey && !e.module.startsWith("@aws-sdk/") && e.module !== "global:fetch" && e.module !== "axios") {
         if (e.path.length > 0) {
@@ -259,7 +242,6 @@ export function runFix(opts: FixOptions): FixResult {
         if (f.rule !== "unguarded-side-effect") continue;
       }
 
-      // 3. wrap the handler's work in guard.run(eventKey...)
       if (!WRAP_RULES.has(f.rule) || wrapped) continue;
       if (!opts.guard) {
         skip(f, "pass --guard <module>#<export> (a @retrysafe/guard instance) to wrap the handler");
@@ -281,7 +263,6 @@ export function runFix(opts: FixOptions): FixResult {
       if (/\.run\(\s*eventKey\./.test(body.getText())) continue;
       wrapped = true;
       const sfFn = fn.getSourceFile();
-      // Start at the first top-level statement that leads to an effect, after the event id exists.
       const stmts = body.getStatements();
       const effectPositions = report.effects
         .filter((x) => x.kind !== "unknown")
@@ -312,7 +293,6 @@ export function runFix(opts: FixOptions): FixResult {
           const all = block.getStatements();
           const from = all.findIndex((s) => s.getStart() >= startPos);
           const rest = all.slice(from);
-          // With a transactional guard, route this handler's direct Prisma/pg writes through the transaction client.
           if (factory === "prismaGuard" || factory === "postgresGuard") {
             const module = factory === "prismaGuard" ? "@prisma/client" : "pg";
             const roots: Node[] = [];
@@ -359,7 +339,6 @@ export function runFix(opts: FixOptions): FixResult {
     }
   }
 
-  // Apply bottom-up per file so earlier positions stay valid.
   const originals = new Map<SourceFile, string>();
   const applied: FixResult["applied"] = [];
   for (const p of planned.sort((a, b) => (a.file === b.file ? b.pos - a.pos : a.file.getFilePath().localeCompare(b.file.getFilePath())))) {

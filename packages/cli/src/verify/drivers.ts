@@ -19,7 +19,6 @@ function joinPath(...parts: string[]): string {
   return `/${parts.join("/").split("/").filter(Boolean).join("/")}`;
 }
 
-/** Express-style request/response pair; `done` resolves when a response is sent. */
 function nodeStyle(d: Delivery, url: string) {
   let resolve!: (status: number) => void;
   const done = new Promise<number>((r) => (resolve = r));
@@ -69,7 +68,6 @@ function nodeStyle(d: Delivery, url: string) {
   return { req, res, done };
 }
 
-/** Run a middleware/handler chain with `next()` semantics. */
 async function runChain(fns: Fn[], req: unknown, res: unknown): Promise<void> {
   let i = 0;
   const next = async (err?: unknown): Promise<void> => {
@@ -82,7 +80,6 @@ async function runChain(fns: Fn[], req: unknown, res: unknown): Promise<void> {
 
 function expressRoute(rt: VerifyRuntime, name: string): { fns: Fn[]; path: string } | undefined {
   const regs = rt.registrations.filter((r) => r.framework === "express");
-  // Mount prefixes: app.use("/billing", router)
   const prefixOf = (owner: object, seen = new Set<object>()): string => {
     if (seen.has(owner)) return "";
     seen.add(owner);
@@ -93,7 +90,6 @@ function expressRoute(rt: VerifyRuntime, name: string): { fns: Fn[]; path: strin
     if (r.kind !== "route") continue;
     const full = joinPath(prefixOf(r.owner), r.path ?? "");
     if (`${r.method!.toUpperCase()} ${full}` !== name) continue;
-    // Middleware registered with use() on this router (and its parents), then the route's own handlers.
     const owners = new Set<object>([r.owner]);
     for (let o: object | undefined = r.owner; o; ) {
       const mount = regs.find((m) => m.kind === "use" && m.handlers.includes(o!));
@@ -112,10 +108,6 @@ function findRoute(rt: VerifyRuntime, framework: string, name: string): Registra
   return rt.registrations.find((r) => r.kind === "route" && r.framework === framework && `${r.method!.toUpperCase()} ${r.path}` === name);
 }
 
-/**
- * Deliver one event to the handler. Modules are already loaded (`mod`), so framework registrations
- * captured during import are in `rt.registrations`.
- */
 export async function deliver(handler: Handler, mod: Record<string, unknown>, rt: VerifyRuntime, d: Delivery, run: number): Promise<DeliveryResult> {
   rt.currentHeaders = new Headers(d.headers);
   const name = handler.name;
@@ -182,7 +174,6 @@ export async function deliver(handler: Handler, mod: Record<string, unknown>, rt
         return { status: 200 };
       }
       default: {
-        // Configured handlers ("file#export") and server actions: call the export with the payload.
         const exportName = name.match(/#(\w+)/)?.[1] ?? "default";
         await (mod[exportName] as Fn)(d.payload);
         return { status: 200 };

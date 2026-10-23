@@ -4,47 +4,32 @@ import type { EffectKind } from "./types";
 export type RuleLevel = "error" | "warning" | "info" | "off";
 
 export interface EffectConfigEntry {
-  /** `module` is a package name, an import specifier ("@/lib/billing"), or a project path ("src/lib/billing"). */
   match: { module: string | string[]; callee: string };
   kind: EffectKind;
   idempotent: boolean | "unknown";
-  /** Where the call accepts an idempotency key, e.g. { arg: 1, field: "idempotencyKey" }. */
   acceptsKey?: { arg: number; field: string };
 }
 
 export interface GuardConfigEntry {
-  /** Callee text, e.g. "withIdempotency" or "dedupe.once". */
   callee: string;
-  /** Argument holding the dedupe key (default 0). */
   keyArg?: number;
-  /** Whether the helper is atomic (default true). */
   atomic?: boolean;
 }
 
 export interface RetrysafeConfig {
-  /** Globs (relative to the project root) of files to discover handlers in. Default: everything. */
   include?: string[];
-  /** Globs to skip during discovery. Default: test files. */
   exclude?: string[];
   handlers?: {
-    /** Auto-discover handlers (default true). */
     discover?: boolean;
-    /** Force-mark functions as at-least-once: "src/jobs/send-invoice.ts#handler" ("#default" for default exports). */
     add?: string[];
-    /** File globs or exact handler names ("POST /api/health") to skip. */
     ignore?: string[];
-    /** Handlers that never run concurrently (single-worker queue, external lock). Race rules skip them. */
     serialized?: string[];
-    /** Also analyze Next.js server actions (double submits and client retries repeat them). Default false. */
     serverActions?: boolean;
   };
-  /** Your own dedupe helpers. */
   guards?: GuardConfigEntry[];
   effects?: { extend?: EffectConfigEntry[] };
-  /** Per-provider facts; check the provider's docs. */
   providers?: Record<string, { retryWindowHours?: number }>;
   analysis?: { maxCallDepth?: number; minConfidence?: "low" | "medium" | "high" };
-  /** Baseline file path, relative to the root (default ".retrysafe-baseline.json"). */
   baseline?: string;
   rules?: Record<string, RuleLevel>;
 }
@@ -97,7 +82,6 @@ export const configSchema = z
 
 export class ConfigError extends Error {}
 
-/** Validate a loaded config object; throws ConfigError with readable messages. */
 export function parseConfig(input: unknown, source = "config", knownRules?: string[]): RetrysafeConfig {
   const r = configSchema.safeParse(input ?? {});
   const lines = r.success ? [] : r.error.issues.map((i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`);
@@ -113,7 +97,6 @@ export function parseConfig(input: unknown, source = "config", knownRules?: stri
 export const DEFAULT_EXCLUDE = ["**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/__mocks__/**"];
 export const DEFAULT_BASELINE = ".retrysafe-baseline.json";
 
-/** Identity helper so config files get type checking. */
 export function defineConfig(config: RetrysafeConfig): RetrysafeConfig {
   return config;
 }

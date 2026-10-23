@@ -4,13 +4,10 @@ import type { EffectKind, KeySpec } from "../types";
 import { HTTP_HOSTS, type EffectCatalogEntry } from "./catalog";
 
 export interface Classification {
-  /** false means "not an effect" (e.g. a SELECT through a generic query method, an HTTP GET). */
   isEffect: boolean;
   idempotent: boolean | "unknown";
   note?: string;
-  /** Overrides the entry's kind (an HTTP call to a payments API is a payment). */
   kind?: EffectKind;
-  /** Overrides the entry's key support, with the key expression when one is passed. */
   acceptsKey?: KeySpec;
   keyNode?: Node;
 }
@@ -25,7 +22,6 @@ export function classify(entry: EffectCatalogEntry, args: Node[], sqlText: strin
   return { isEffect: true, idempotent: entry.idempotent };
 }
 
-/** GraphQL documents: queries are not effects; mutations are, unless they carry Shopify's @idempotent directive. */
 export function classifyGraphql(doc: string | undefined): Classification {
   if (!doc) return { isEffect: true, idempotent: "unknown", note: "GraphQL document not statically known" };
   if (!/^\s*mutation\b/.test(doc.replace(/#[^\n]*/g, ""))) return { isEffect: false, idempotent: true };
@@ -36,7 +32,6 @@ export function classifyGraphql(doc: string | undefined): Classification {
 
 const HTTP_WRITE_METHODS = new Set(["post", "put", "patch", "delete"]);
 
-/** Property (at any depth inside the call's object arguments) whose name matches, e.g. an Idempotency-Key header. */
 function findProperty(args: Node[], name: string): Node | undefined {
   const want = name.toLowerCase();
   for (const a of args) {
@@ -48,10 +43,6 @@ function findProperty(args: Node[], name: string): Node | undefined {
   return undefined;
 }
 
-/**
- * Outbound HTTP: `axios.post(url, body, config)`, `axios({ method, url })`, `fetch(url, { method })`, `got.post(url)`.
- * Reads are not effects. Calls to known API hosts take that API's kind and idempotency mechanism.
- */
 export function classifyHttp(args: Node[], chain: string[]): Classification {
   const last = chain[chain.length - 1];
   let method = last && HTTP_WRITE_METHODS.has(last) ? last : undefined;
@@ -59,7 +50,6 @@ export function classifyHttp(args: Node[], chain: string[]): Classification {
   let options = args.slice(1);
   const first = args[0] && unwrap(args[0]);
   if (first && Node.isObjectLiteralExpression(first)) {
-    // axios(config) / axios.request(config)
     const url = first.getProperty("url");
     urlNode = url && Node.isPropertyAssignment(url) ? url.getInitializer() : undefined;
     options = [first];
@@ -75,7 +65,6 @@ export function classifyHttp(args: Node[], chain: string[]): Classification {
   const fact = host ? HTTP_HOSTS[host] : undefined;
   const label = `${method.toUpperCase()} ${host ?? (url.length > 40 ? `${url.slice(0, 40)}…` : url || "(dynamic URL)")}`;
   if (!fact) {
-    // DELETE and PUT are idempotent by HTTP semantics; POST/PATCH to an unknown API may or may not be.
     return { isEffect: true, idempotent: method === "delete" || method === "put" ? true : "unknown", note: label };
   }
   const keyField = fact.idempotencyHeader ?? fact.bodyKey;
@@ -109,7 +98,6 @@ function classifyPrisma(entry: EffectCatalogEntry, args: Node[]): Classification
     }
     return { isEffect: true, idempotent: false };
   }
-  // Updates and upserts are idempotent unless they apply a relative operation.
   const roots = [objectProp(options, "data"), objectProp(options, "update"), objectProp(options, "create")];
   for (const data of roots) {
     const d = data && unwrap(data);
@@ -156,11 +144,9 @@ export function classifySql(sql: string | undefined): Classification {
 }
 
 function hasRelativeUpdate(upperSql: string): boolean {
-  // col = col + 1, "col" = "col" - $1, col = EXCLUDED.col + t.col ...
   return /("?\w+"?)\s*=\s*(\w+\.)?\1\s*[+\-*]/.test(upperSql);
 }
 
-/** Table name targeted by an INSERT statement, if any. */
 export function insertTable(sql: string | undefined): string | undefined {
   const m = sql?.match(/\binsert\s+(?:ignore\s+)?into\s+["`]?([\w.]+)["`]?/i);
   return m?.[1];

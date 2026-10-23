@@ -7,7 +7,6 @@ function text(f: Finding): string {
   return [f.message, "", "Failing sequence:", ...f.failingSequence.map((s, i) => `${i + 1}. ${s}`), "", `Fix: ${f.fix}`].join("\n");
 }
 
-/** SARIF 2.1.0 for GitHub code scanning and other SARIF consumers. */
 export function renderSarif(result: AnalysisResult, version: string): string {
   const handlerName = new Map(result.handlers.map((h) => [h.handler.id, h.handler.name]));
   const sarif = {

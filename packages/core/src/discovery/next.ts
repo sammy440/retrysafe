@@ -8,7 +8,6 @@ const PAGES_API = /(?:^|\/)(?:src\/)?pages\/(api\/.+)\.[cm]?[jt]sx?$/;
 const METHODS = ["POST", "PUT", "PATCH"];
 
 function routeFromSegments(rel: string): string {
-  // Drop route groups "(marketing)" and parallel-route slots "@modal".
   const segs = rel.split("/").filter((s) => s && !/^\(.*\)$/.test(s) && !s.startsWith("@"));
   if (segs[segs.length - 1] === "index") segs.pop();
   return `/${segs.join("/")}`;

@@ -6,7 +6,6 @@ import { tsconfigReferences, workspacePackages } from "./workspace";
 export interface LoadedProject {
   project: Project;
   root: string;
-  /** Project source files, excluding declaration files and node_modules. */
   sourceFiles: SourceFile[];
 }
 
@@ -32,23 +31,13 @@ function withTsconfig(configPath: string): Project {
   return new Project({ tsConfigFilePath: configPath, compilerOptions: { allowJs: true } });
 }
 
-/**
- * Load a TypeScript/JavaScript project from disk. Uses the root tsconfig.json when present
- * (so path aliases resolve), otherwise falls back to permissive defaults over all source files.
- */
 export function loadProject(root: string, tsconfigPath?: string): LoadedProject {
-  // realpath: on case-insensitive file systems a differently-cased path would make every glob miss.
   const absRoot = realpathSync.native(path.resolve(root));
   const configPath = tsconfigPath ? path.resolve(tsconfigPath) : path.join(absRoot, "tsconfig.json");
   const project = existsSync(configPath) ? withTsconfig(configPath) : withGlobs(absRoot);
   return { project, root: absRoot, sourceFiles: projectSourceFiles(project) };
 }
 
-/**
- * Load every project under `root`. A plain repo is one project. A monorepo whose root tsconfig is missing
- * or solution-style (no files of its own) is loaded per referenced tsconfig and per workspace package,
- * each with its own compiler options and path aliases. All share `root` for relative paths.
- */
 export function loadProjects(root: string, tsconfigPath?: string): LoadedProject[] {
   const absRoot = realpathSync.native(path.resolve(root));
   if (tsconfigPath) return [loadProject(absRoot, tsconfigPath)];
@@ -74,7 +63,6 @@ export function loadProjects(root: string, tsconfigPath?: string): LoadedProject
   return loaded.length ? loaded : [loadProject(absRoot)];
 }
 
-/** Wrap an existing (e.g. in-memory) ts-morph project. */
 export function fromProject(project: Project, root = "/"): LoadedProject {
   return { project, root: path.resolve(root), sourceFiles: projectSourceFiles(project) };
 }

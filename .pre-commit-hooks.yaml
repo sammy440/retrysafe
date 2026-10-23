@@ -1,8 +1,3 @@
-# For https://pre-commit.com: add to .pre-commit-config.yaml
-#   - repo: https://github.com/sammy440/retrysafe
-#     rev: <tag>
-#     hooks:
-#       - id: retrysafe
 - id: retrysafe
   name: retrysafe
   description: Check staged webhook and queue handlers for retry-safety problems.

@@ -1,11 +1,8 @@
-// Public type entries for `retrysafe` and `retrysafe/core`, re-exporting the emitted core declarations.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 
-// NodeNext consumers need explicit extensions on relative imports in .d.ts files.
 const typesDir = new URL("../dist/types/", import.meta.url);
 for (const f of readdirSync(typesDir, { recursive: true }).filter((f) => f.endsWith(".d.ts"))) {
   const file = new URL(f, typesDir);
-  // A specifier naming a directory resolves to its index.
   const ext = (p) => (p.endsWith(".js") ? p : existsSync(new URL(`${p}/index.d.ts`, file)) ? `${p}/index.js` : `${p}.js`);
   writeFileSync(file, readFileSync(file, "utf8").replace(/(from\s+["'])(\.\.?\/[^"']+?)(["'])/g, (m, a, p, b) => `${a}${ext(p)}${b}`));
 }

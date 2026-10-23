@@ -5,7 +5,6 @@ export function isRelativeWrite(e: Effect): boolean {
   return e.kind === "db-write" && e.idempotent === false && !!e.note && /increment|decrement|relative|\$inc|\$push|\$mul|push on|multiply|divide/i.test(e.note);
 }
 
-/** x = x + n, ORM increment, $inc, array push: a retry applies the change again. */
 export const incrementingWriteUnguarded: Rule = {
   id: "incrementing-write-unguarded",
   severity: "error",

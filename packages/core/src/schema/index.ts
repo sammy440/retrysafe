@@ -2,12 +2,10 @@ import path from "node:path";
 import { Node, SyntaxKind, type FileSystemHost, type SourceFile } from "ts-morph";
 import { moduleOf, textOf, unwrap } from "../project/resolve";
 
-/** Unique column sets per table, keyed by every name the table goes by (model, accessor, SQL name). */
 export interface SchemaFacts {
   tables: Map<string, { name: string; unique: string[][]; source: string }>;
 }
 
-/** Compare table and column names across conventions: ProcessedEvent, processedEvent, processed_events. */
 export function normalizeName(name: string): string {
   return name.replace(/["`'[\]]/g, "").split(".").pop()!.replace(/_/g, "").toLowerCase();
 }
@@ -27,13 +25,10 @@ function addTable(facts: SchemaFacts, names: string[], unique: string[][], sourc
   for (const n of names) facts.tables.set(normalizeName(n), entry);
 }
 
-/** Look a table up by any of its names, falling back to singular/plural variants. */
 export function findTable(facts: SchemaFacts, name: string) {
   const n = normalizeName(name);
   return facts.tables.get(n) ?? facts.tables.get(singular(n)) ?? facts.tables.get(`${n}s`);
 }
-
-// ---------- Prisma ----------
 
 export function parsePrismaSchema(text: string, facts: SchemaFacts, source: string): void {
   const clean = text.replace(/\/\/[^\n]*/g, "");
@@ -69,7 +64,6 @@ function prismaSchemaFiles(fs: FileSystemHost, root: string): string[] {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"))) as { prisma?: { schema?: string } };
     if (pkg.prisma?.schema) candidates.push(path.resolve(root, pkg.prisma.schema));
   } catch {
-    // no package.json
   }
   return candidates.filter((f) => fs.fileExistsSync(f));
 }
@@ -82,8 +76,6 @@ function safeReadDir(fs: FileSystemHost, dir: string): { name: string; isFile: b
   }
 }
 
-// ---------- SQL migrations ----------
-
 function splitColumns(list: string): string[] {
   return list.split(",").map((c) => c.trim().replace(/["`]/g, "").split(/\s+/)[0]!).filter(Boolean);
 }
@@ -93,7 +85,6 @@ export function parseSqlSchema(sql: string, facts: SchemaFacts, source: string):
   for (const m of text.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?([\w."`]+)\s*\(([\s\S]*?)\);/gi)) {
     const table = m[1]!.replace(/["`]/g, "");
     const unique: string[][] = [];
-    // Split the body on top-level commas.
     let depth = 0;
     let cur = "";
     const parts: string[] = [];
@@ -140,8 +131,6 @@ function sqlFiles(fs: FileSystemHost, root: string, limit = 2000): string[] {
   return out;
 }
 
-// ---------- Drizzle and Mongoose (from TypeScript source) ----------
-
 const DRIZZLE_TABLE = new Set(["pgTable", "mysqlTable", "sqliteTable", "table"]);
 
 function parseDrizzle(sf: SourceFile, facts: SchemaFacts, source: string): void {
@@ -165,7 +154,6 @@ function parseDrizzle(sf: SourceFile, facts: SchemaFacts, source: string): void 
         }
       }
     }
-    // (t) => [unique().on(t.a, t.b), uniqueIndex("x").on(t.a), primaryKey({ columns: [t.a] })]
     for (const m of (extra?.getText() ?? "").matchAll(/(?:unique|uniqueIndex)\([^)]*\)\s*\.on\(([^)]*)\)|primaryKey\(\s*\{\s*columns\s*:\s*\[([^\]]*)\]/g)) {
       unique.push((m[1] ?? m[2] ?? "").split(",").map((c) => c.trim().split(".").pop()!).filter(Boolean));
     }
@@ -186,12 +174,10 @@ function parseMongoose(sf: SourceFile, facts: SchemaFacts, source: string): void
     }
     const holder = n.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
     schemas.set(holder?.getName() ?? `@${n.getStart()}`, unique);
-    // model("Name", new Schema(...)) inline
     const call = n.getParentIfKind(SyntaxKind.CallExpression);
     const modelName = call && /(^|\.)model$/.test(call.getExpression().getText()) ? textOf(call.getArguments()[0]) : undefined;
     if (modelName) addTable(facts, [modelName, call!.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.getName() ?? modelName], unique, source);
   }
-  // const ProcessedEvent = mongoose.model("ProcessedEvent", processedSchema)
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!/(^|\.)model$/.test(call.getExpression().getText())) continue;
     const [nameArg, schemaArg] = call.getArguments();
@@ -201,7 +187,6 @@ function parseMongoose(sf: SourceFile, facts: SchemaFacts, source: string): void
   }
 }
 
-/** Read every schema source under `root`: Prisma schema files, SQL migrations, Drizzle tables, Mongoose schemas. */
 export function loadSchema(fs: FileSystemHost, root: string, sourceFiles: SourceFile[]): SchemaFacts {
   const facts: SchemaFacts = { tables: new Map() };
   const rel = (f: string) => path.relative(root, f).split(path.sep).join("/");
@@ -215,10 +200,6 @@ export function loadSchema(fs: FileSystemHost, root: string, sourceFiles: Source
   return facts;
 }
 
-/**
- * Is an insert of `columns` into `table` stopped by a unique constraint? "unique-constraint" when some unique
- * column set is fully covered by the inserted columns; "no-unique-constraint" when the table is known but none is.
- */
 export function insertProtection(facts: SchemaFacts, table: string | undefined, columns: string[] | undefined): "unique-constraint" | "no-unique-constraint" | "not-found" {
   if (!table) return "not-found";
   const t = findTable(facts, table);

@@ -1,9 +1,7 @@
-/** Minimal unified diff (line-based LCS), enough for reviewing codemod output. */
 export function unifiedDiff(file: string, before: string, after: string, context = 3): string {
   if (before === after) return "";
   const a = before.split("\n");
   const b = after.split("\n");
-  // Trim the common prefix/suffix so the LCS table stays small.
   let start = 0;
   while (start < a.length && start < b.length && a[start] === b[start]) start++;
   let endA = a.length;
@@ -37,7 +35,6 @@ export function unifiedDiff(file: string, before: string, after: string, context
   }
   ops.push(...a.slice(endA).map((line) => ({ t: " " as const, line })));
 
-  // Group changes into hunks with `context` lines around them.
   const out = [`--- a/${file}`, `+++ b/${file}`];
   const changed = ops.map((o, k) => (o.t !== " " ? k : -1)).filter((k) => k >= 0);
   let k = 0;

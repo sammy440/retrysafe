@@ -13,11 +13,6 @@ function hasUseServer(statements: Node[]): boolean {
   return false;
 }
 
-/**
- * Next.js server actions: exported functions of a "use server" file, and functions with an inline
- * "use server" directive. They are not retried by a provider, but double submits and client retries
- * repeat them, so they are opt-in (handlers.serverActions).
- */
 export function discoverServerActions(files: SourceFile[], root: string): Candidate[] {
   const out: Candidate[] = [];
   const push = (fn: FunctionLike, rel: string, name: string) =>

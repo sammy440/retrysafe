@@ -68,7 +68,6 @@ describe("retrysafe fix", () => {
     expect(src).toContain("await tx.order.create(");
     expect(src).toContain('if (result.status === "duplicate") return res.status(200).end();');
 
-    // The Stripe handler's own write and the receipt email it sends through a helper are now guarded.
     const after = analyze({ root }).findings.filter((f) => f.handler.includes("POST /webhooks/stripe"));
     expect(after.map((f) => f.rule)).toEqual([]);
   });

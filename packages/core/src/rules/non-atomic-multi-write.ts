@@ -1,13 +1,11 @@
 import type { Effect, HandlerReport } from "../types";
 import { at, transactionalClaim, type Rule, type RuleFinding } from "./shared";
 
-/** Two effects can both run only if one's branch lineage is a prefix of the other's. */
 function sameLine(a: Effect, b: Effect): boolean {
   const [short, long] = a.branch.length <= b.branch.length ? [a.branch, b.branch] : [b.branch, a.branch];
   return short.every((x, i) => long[i] === x);
 }
 
-/** Several dependent writes, no transaction: a failure part-way plus a retry leaves inconsistent state. */
 export const nonAtomicMultiWrite: Rule = {
   id: "non-atomic-multi-write",
   severity: "warning",

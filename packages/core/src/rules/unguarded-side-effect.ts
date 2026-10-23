@@ -43,10 +43,8 @@ export const unguardedSideEffect: Rule = {
   run(report: HandlerReport): RuleFinding[] {
     const out: RuleFinding[] = [];
     for (const e of report.effects) {
-      // Unresolved calls with effect-like names are reported too, but only at low confidence.
       const unresolved = e.kind === "unknown" && e.module === "(unresolved)";
       if ((e.idempotent !== false && !unresolved) || e.hasIdempotencyKey || effectiveGuards(e).length > 0) continue;
-      // Reported by their own rules: incrementing-write-unguarded, queue-add-without-job-id.
       if (isRelativeWrite(e) || (e.kind === "enqueue" && e.acceptsIdempotencyKey)) continue;
       const hollow = e.protectedBy.find((g) => g.kind === "unique-insert" && g.atomic === false);
       const hollowNote = hollow ? `; ${hollow.description} has no unique constraint${hollow.schemaSource ? ` in ${hollow.schemaSource}` : ""}, so it does not stop duplicates` : "";
@@ -55,7 +53,6 @@ export const unguardedSideEffect: Rule = {
       out.push({
         rule: this.id,
         severity: this.severity,
-        // Deep call chains are more likely to hide a guard we did not model.
         confidence: unresolved ? "low" : e.path.length <= 1 ? "high" : "medium",
         handler: report.handler.id,
         location: e.location,

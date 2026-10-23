@@ -3,11 +3,6 @@ import { SNIPPETS, stableId, type Rule, type RuleFinding } from "./shared";
 
 const KINDS = new Set(["payment", "email", "sms"]);
 
-/**
- * The SDK supports an idempotency key but the call does not pass one. Reported for guarded calls only
- * (unguarded ones are already unguarded-side-effect): a guard can still let a repeat through when the
- * process dies after the call but before its result is committed, and a provider-side key closes that gap.
- */
 export const effectMissingIdempotencyKey: Rule = {
   id: "effect-missing-idempotency-key",
   severity: "warning",

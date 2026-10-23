@@ -1,7 +1,6 @@
 import type { HandlerReport } from "../types";
 import { providerName, type Rule, type RuleFinding } from "./shared";
 
-/** A bad signature or malformed payload answered with 5xx: the provider retries something that can never succeed. */
 export const permanentErrorReturns5xx: Rule = {
   id: "permanent-error-returns-5xx",
   severity: "warning",

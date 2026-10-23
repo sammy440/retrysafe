@@ -67,7 +67,6 @@ function finding(f: Finding): string[] {
 export interface TerminalOptions {
   handlersOnly?: boolean;
   allEffectMaps?: boolean;
-  /** Baseline entries that no longer match a finding. */
   staleBaseline?: number;
 }
 

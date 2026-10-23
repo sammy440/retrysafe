@@ -1,7 +1,6 @@
 import type { HandlerReport } from "../types";
 import { deliveryNarrative, providerName, type Rule, type RuleFinding } from "./shared";
 
-/** A catch block logs the error and acknowledges anyway, so the provider never retries and the event is lost. */
 export const swallowedErrorReturns2xx: Rule = {
   id: "swallowed-error-returns-2xx",
   severity: "error",
@@ -17,7 +16,6 @@ export const swallowedErrorReturns2xx: Rule = {
       if (c.rethrows || c.reportsFailure || c.tryEffects === 0) continue;
       if (c.statuses.some((s) => s >= 400)) continue;
       const explicit = c.statuses.some((s) => s < 300);
-      // An HTTP catch that neither responds nor rethrows falls through to the handler's success path.
       const effect = c.tryEffectCallees[0]!;
       const story = deliveryNarrative(report.handler);
       out.push({

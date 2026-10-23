@@ -8,7 +8,6 @@ function joinPath(prefix: string, p: string): string {
   return `/${`${prefix}/${p}`.split("/").filter(Boolean).join("/")}`;
 }
 
-/** The declaration a router/app identifier refers to, used to look up mount prefixes. */
 function receiverDecl(receiver: Node): Node | undefined {
   if (!Node.isIdentifier(receiver)) return undefined;
   for (const r of resolveIdentifier(receiver)) if ("decl" in r) return r.decl;
@@ -19,7 +18,6 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
   const calls = files.flatMap((sf) => sf.getDescendantsOfKind(SyntaxKind.CallExpression));
   const isExpress = (n: Node) => moduleOf(n)?.module === "express";
 
-  // app.use("/billing", billingRouter) -> prefix for routes registered on billingRouter.
   const prefixes = new Map<Node, string>();
   for (const call of calls) {
     const callee = call.getExpression();
@@ -31,7 +29,6 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
     if (decl) prefixes.set(decl, prefix);
   }
 
-  // app.use(mw) / router.use("/path", mw): middleware for later routes on the same app or router.
   const uses: { decl: Node; path: string; nodes: Node[]; pos: number; file: string }[] = [];
   for (const call of calls) {
     const callee = call.getExpression();
@@ -42,7 +39,6 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
     if (!decl) continue;
     const args = call.getArguments();
     const path = textOf(args[0]);
-    // Routers mounted with use() are not middleware.
     const nodes = (path === undefined ? args : args.slice(1)).filter((a) => !(Node.isIdentifier(a) && prefixes.has(receiverDecl(a) ?? a)));
     uses.push({ decl, path: path ?? "/", nodes, pos: call.getStart(), file: call.getSourceFile().getFilePath() });
   }
@@ -52,7 +48,6 @@ export function discoverExpress(files: SourceFile[]): Candidate[] {
     const callee = call.getExpression();
     if (!Node.isPropertyAccessExpression(callee) || !METHODS.has(callee.getName())) continue;
     const args = call.getArguments();
-    // router.route("/hooks").post(handler) carries the path on the route() call.
     const inner = unwrap(callee.getExpression());
     const chained = Node.isCallExpression(inner) && Node.isPropertyAccessExpression(inner.getExpression()) && inner.getExpression().getText().endsWith(".route");
     const routePath = chained ? textOf(inner.getArguments()[0]) : textOf(args[0]);

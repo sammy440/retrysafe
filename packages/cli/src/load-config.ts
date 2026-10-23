@@ -19,7 +19,6 @@ export function findConfig(root: string): string | undefined {
   return CONFIG_FILES.map((f) => path.join(root, f)).find(existsSync);
 }
 
-/** This package's own public entry, so `import { defineConfig } from "retrysafe"` works under npx too. */
 function selfEntry(): string | undefined {
   return ["./config.js", "./config.ts"].map((p) => fileURLToPath(new URL(p, import.meta.url))).find(existsSync);
 }

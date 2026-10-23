@@ -1,15 +1,11 @@
 import { createHash } from "node:crypto";
 import type { Effect, Finding, Guard, Handler, HandlerReport, Severity, SourceLocation } from "../types";
 
-/** A finding before it is fingerprinted (ids are assigned by the analyzer, which can see source text). */
 export type RuleFinding = Omit<Finding, "id">;
 
 export interface RuleDocs {
-  /** One line, used in SARIF and listings. */
   summary: string;
-  /** Why it goes wrong. */
   why: string;
-  /** The safe pattern, in words. */
   safePattern: string;
 }
 
@@ -20,10 +16,6 @@ export interface Rule {
   run(report: HandlerReport): RuleFinding[];
 }
 
-/**
- * Stable id for baselines and `explain`: built from the rule, the handler, the file, and the text of the
- * flagged line, so it survives unrelated edits that shift line numbers.
- */
 export function fingerprint(parts: string[]): string {
   return createHash("sha1").update(parts.join("|")).digest("hex").slice(0, 8);
 }
@@ -76,24 +68,20 @@ export function consequence(e: Effect): string {
   return CONSEQUENCE[e.kind];
 }
 
-/** The expression a fix should key on: the job id for workers, the provider's event id for webhooks. */
 export function stableId(h: Handler): string {
   return h.kind === "queue-worker" ? "job.id" : "event.id";
 }
 
-/** Guards that can actually stop a duplicate: a unique insert the schema shows is unconstrained does not. */
 export function effectiveGuards(e: Effect): Guard[] {
   return e.protectedBy.filter((g) => !(g.kind === "unique-insert" && g.atomic === false));
 }
 
 export const at = (l: SourceLocation) => `${l.file}:${l.line}`;
 
-/** Two steps commit together only if they run inside the same transaction. */
 export function sameTransaction(a: { transaction?: string }, b: { transaction?: string }): boolean {
   return !!a.transaction && a.transaction === b.transaction;
 }
 
-/** Code for the safe patterns, referenced by fixes. Kept generic: Prisma for DB, Redis for claims. */
 const TX_CLAIM: Record<string, string> = {
   prisma: `await prisma.$transaction(async (tx) => {
   // processedEvent.id has a unique constraint: a retry throws here and nothing below commits twice.
@@ -129,7 +117,6 @@ if (claim.rowCount === 0) { await client.query("ROLLBACK"); return; } // duplica
 await client.query("COMMIT");`,
 };
 
-/** The transactional-claim pattern written for the library the effect uses. */
 export function transactionalClaim(module: string): string {
   if (module.startsWith("drizzle-orm")) return TX_CLAIM.drizzle!;
   if (module === "knex") return TX_CLAIM.knex!;

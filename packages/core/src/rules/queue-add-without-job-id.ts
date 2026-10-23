@@ -1,7 +1,6 @@
 import type { HandlerReport } from "../types";
 import { stableId, type Rule, type RuleFinding } from "./shared";
 
-/** Enqueuing from a handler without the queue's deduplication id. */
 export const queueAddWithoutJobId: Rule = {
   id: "queue-add-without-job-id",
   severity: "info",

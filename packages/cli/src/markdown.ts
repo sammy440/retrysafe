@@ -18,7 +18,6 @@ function effectRow(e: Effect, report: HandlerReport): string {
   return `| ${rules.length ? "❌" : "✅"} | ${e.kind} | \`${cell(e.callee)}\` | ${at(e.location)} | ${cell(status)} | ${rules.join(", ")} |`;
 }
 
-/** Markdown report for PR comments, CI summaries, and issues. */
 export function renderMarkdown(result: AnalysisResult): string {
   const out: string[] = ["# retrysafe report", ""];
   const flagged = result.handlers.filter((h) => h.findings.length);

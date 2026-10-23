@@ -22,10 +22,8 @@ import { applyInlineSuppressions } from "./suppress";
 import type { AnalysisResult, Check, Confidence, Finding, Handler, HandlerReport } from "./types";
 
 export interface AnalyzeOptions {
-  /** Directory to analyze. Defaults to the current working directory. */
   root?: string;
   tsconfig?: string;
-  /** Analyze an existing ts-morph project (e.g. in-memory, for tests or the playground). */
   project?: Project;
   include?: string[];
   exclude?: string[];
@@ -38,7 +36,6 @@ export interface AnalyzeOptions {
   rules?: Record<string, RuleSetting>;
 }
 
-/** Map a validated config file onto analyzer options. Explicit (non-undefined) overrides win. */
 export function optionsFromConfig(config: RetrysafeConfig, overrides: AnalyzeOptions = {}): AnalyzeOptions {
   return {
     include: config.include,
@@ -59,7 +56,6 @@ const CONFIDENCE_RANK: Record<Confidence, number> = { low: 0, medium: 1, high: 2
 
 const rel = (root: string, sf: SourceFile) => path.relative(root, sf.getFilePath()).split(path.sep).join("/");
 
-/** Source files to discover handlers in (calls are still followed into every project file). */
 export function discoveryFiles(loaded: LoadedProject, opts: Pick<AnalyzeOptions, "include" | "exclude">): SourceFile[] {
   const include = opts.include?.length ? picomatch(opts.include, { dot: true }) : () => true;
   const exclude = picomatch(opts.exclude ?? DEFAULT_EXCLUDE, { dot: true });
@@ -84,7 +80,6 @@ export function discover(loaded: LoadedProject, opts: AnalyzeOptions = {}): Cand
           ...(opts.handlers?.serverActions ? discoverServerActions(files, loaded.root) : []),
         ];
   const configured = discoverConfigured(loaded, opts.handlers?.add ?? []);
-  // A configured entry replaces an auto-discovered one for the same function.
   const forced = new Set(configured.map((c) => c.fn));
   const ignore = opts.handlers?.ignore ?? [];
   const ignoredFile = ignore.length ? picomatch(ignore, { dot: true }) : () => false;
@@ -93,10 +88,6 @@ export function discover(loaded: LoadedProject, opts: AnalyzeOptions = {}): Cand
   );
 }
 
-/**
- * Decide unique inserts from the schema: a claim is atomic only if a unique constraint covers the inserted
- * columns. A table the schema defines without one cannot stop duplicates, even with ON CONFLICT.
- */
 function applySchema(report: HandlerReport, schema: SchemaFacts): void {
   for (const g of report.guards) {
     if (g.kind !== "unique-insert") continue;
@@ -107,7 +98,6 @@ function applySchema(report: HandlerReport, schema: SchemaFacts): void {
   }
 }
 
-/** Event types a handler branches on: `event.type === "invoice.paid"`, `case "invoice.paid":`. */
 function eventTypes(fn: Node): string[] {
   const text = fn.getText();
   const types = new Set<string>();
@@ -118,7 +108,6 @@ function eventTypes(fn: Node): string[] {
   return [...types];
 }
 
-/** Does the handler compare a version, sequence, or timestamp before applying state? */
 function checksOrdering(fn: Node): boolean {
   const text = fn.getText();
   const field = "(version|sequence|seq|revision|created|createdAt|created_at|updatedAt|updated_at|occurred_?at|event_?time|timestamp|lastEventAt)";
@@ -129,7 +118,6 @@ function checksOrdering(fn: Node): boolean {
   );
 }
 
-/** Header names that only webhook deliveries carry (signature and delivery-id headers). */
 const WEBHOOK_HEADER = /^(stripe-signature|x-hub-signature(-256)?|x-github-(delivery|event)|x-paystack-signature|verif-hash|x-shopify-(hmac-sha256|webhook-id)|svix-(id|signature)|webhook-(id|signature)|x-twilio-signature|paypal-transmission-(id|sig)|x-razorpay-signature|x-signature|x-webhook-signature)$/i;
 
 function readsWebhookHeader(c: Candidate): boolean {
@@ -171,7 +159,6 @@ export function analyzeLoaded(loaded: LoadedProject, opts: AnalyzeOptions = {}):
       extraEffects: opts.effects ?? [],
     });
     const mw = resolveMiddleware(c.middleware ?? [], opts.guards ?? []);
-    // A handler registered through withGuard(guard, key, handler) runs once per key.
     const wrapper = c.fn.getParent();
     const adapter = wrapper && guardLibraryAdapter(wrapper);
     if (adapter) mw.guards.push({ node: wrapper, guard: adapter });
@@ -198,7 +185,6 @@ export function analyzeLoaded(loaded: LoadedProject, opts: AnalyzeOptions = {}):
     const report: HandlerReport = { handler, ...walked, eventTypes: eventTypes(c.fn), checksOrdering: checksOrdering(c.fn), findings: [] };
     applySchema(report, schema);
 
-    // Fingerprint on rule + handler + file + flagged line text (not line numbers), numbering repeats.
     const seen = new Map<string, number>();
     report.findings = runRules(report, opts.rules)
       .filter((f) => CONFIDENCE_RANK[f.confidence] >= minRank)
@@ -227,7 +213,6 @@ export function analyze(opts: AnalyzeOptions = {}): AnalysisResult {
   return mergeResults(projects.map((p) => analyzeLoaded(p, opts)));
 }
 
-/** Combine per-package results; a file included by two tsconfigs yields its handlers once. */
 export function mergeResults(results: AnalysisResult[]): AnalysisResult {
   if (results.length === 1) return results[0]!;
   const seen = new Set<string>();

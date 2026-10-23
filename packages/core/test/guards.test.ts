@@ -9,7 +9,6 @@ const LIBS = {
   "/lib/mail.ts": `import nodemailer from "nodemailer";\nconst t = nodemailer.createTransport({});\nexport const send = (to: string) => t.sendMail({ to });`,
 };
 
-/** Analyze a Next.js webhook route whose POST body is `body`. */
 function run(body: string, opts: AnalyzeOptions = {}) {
   const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { allowJs: true } });
   for (const [file, src] of Object.entries(LIBS)) project.createSourceFile(file, src);
@@ -30,7 +29,6 @@ ${body}
 }
 
 const rules = (r: ReturnType<typeof run>) => r.findings.map((f) => f.rule);
-/** Guard-detection tests only care whether the effect counts as guarded. */
 const unguarded = (r: ReturnType<typeof run>) => rules(r).filter((x) => x === "unguarded-side-effect");
 
 const EFFECT = `  await send(event.email);`;
@@ -48,7 +46,6 @@ describe("guard detection", () => {
   });
 
   it("treats a SET NX checked with the wrong polarity as no guard", () => {
-    // Exits when the claim *succeeds*; the effect runs only for duplicates.
     const body = `  const ok = await redis.set(event.id, "1", "NX");\n  if (ok) return new Response("first");\n${EFFECT}`;
     expect(unguarded(run(body))).toEqual(["unguarded-side-effect"]);
   });

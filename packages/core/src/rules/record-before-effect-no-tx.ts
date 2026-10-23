@@ -1,10 +1,6 @@
 import type { HandlerReport } from "../types";
 import { SNIPPETS, transactionalClaim, at, deliveryNarrative, sameTransaction, type Rule, type RuleFinding } from "./shared";
 
-/**
- * The event is claimed first, then the work runs outside the claim's transaction. A crash after the
- * claim leaves the event marked as processed with the work undone; the retry is skipped and the event is lost.
- */
 export const recordBeforeEffectNoTx: Rule = {
   id: "record-before-effect-no-tx",
   severity: "error",
@@ -17,7 +13,6 @@ export const recordBeforeEffectNoTx: Rule = {
     const out: RuleFinding[] = [];
     for (const record of report.records) {
       const guard = record.guard;
-      // A claim the schema shows is not unique does not claim anything (unguarded-side-effect reports that).
       if (record.kind !== "claim" || !guard || guard.atomic === false) continue;
       const after = report.effects.filter((e) => e.kind !== "unknown" && e.order > record.order && e.protectedBy.includes(guard) && !sameTransaction(record, e));
       const first = after[0];
@@ -26,7 +21,6 @@ export const recordBeforeEffectNoTx: Rule = {
       const story = deliveryNarrative(report.handler);
       const names = after.map((e) => e.callee);
       const list = names.length > 2 ? `${names.slice(0, 2).join(", ")} and ${names.length - 2} more` : names.join(" and ");
-      // A release in a catch block covers thrown errors but not a killed process; a Redis TTL may act as a lease.
       const confidence = report.releases.length > 0 ? "low" : guard.kind === "redis-setnx" ? "medium" : "high";
       const dbOnly = after.every((e) => e.kind === "db-write");
 

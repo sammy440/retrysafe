@@ -1,10 +1,6 @@
 import type { HandlerReport } from "../types";
 import { at, consequence, effectiveGuards, transactionalClaim, type Rule, type RuleFinding } from "./shared";
 
-/**
- * "Seen it?" lookup, then work, with nothing atomic in between. Two copies delivered at the same moment both
- * read "not seen" and both do the work, whether or not the later insert has a unique constraint.
- */
 export const checkThenInsertRace: Rule = {
   id: "check-then-insert-race",
   severity: "error",

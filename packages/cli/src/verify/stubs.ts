@@ -2,13 +2,6 @@ import { randomUUID } from "node:crypto";
 import { DEDUPE_NAME } from "@retrysafe/core";
 import type { Registration, VerifyRuntime } from "./runtime";
 
-/**
- * Recording stand-ins for the libraries a handler talks to. Each stub is a Proxy that accepts any
- * property access, call, or construction and logs calls; families that guards depend on (Redis,
- * Prisma, SQL, Drizzle/Knex, Mongoose, Stripe keys, queue job ids, AWS conditional puts) get just
- * enough real behavior that a correct guard actually stops the second delivery.
- */
-
 const YIELD = () => new Promise<void>((r) => setImmediate(r));
 const KEY_FIELD = /^(id|_id|key)$|key$|id$|_id$/i;
 
@@ -19,7 +12,6 @@ function keyFields(data: unknown): Record<string, unknown> {
   return Object.fromEntries(keys.length ? keys : entries);
 }
 
-/** A value standing in for data returned by a stubbed call: any property works, ids are strings. */
 function dataValue(rt: VerifyRuntime): unknown {
   const target = /* biome-ignore lint/complexity/useArrowFunction: Proxy targets must be constructible */ function () {} as unknown as Record<PropertyKey, unknown>;
   return new Proxy(target, {
@@ -48,7 +40,6 @@ interface Stub {
   child(chain: string[]): unknown;
 }
 
-/** Generic chainable proxy; `behave` may return DEFAULT to fall back to "record and return a value". */
 function proxy(rt: VerifyRuntime, module: string, chain: string[], behave?: Handler, construct?: Handler): unknown {
   const self: Stub = {
     rt,
@@ -75,16 +66,11 @@ function proxy(rt: VerifyRuntime, module: string, chain: string[], behave?: Hand
     construct(_t, args: unknown[]) {
       const out = construct?.(chain, args, self);
       if (out !== DEFAULT && out !== undefined) return out as object;
-      // new Stripe(key), new PrismaClient(), new Redis(): a client rooted at the module.
       return proxy(rt, module, [], behave, construct) as object;
     },
   });
 }
 
-/**
- * What a generic stubbed call returns: awaitable (resolving to a data value) and also usable as a client,
- * since factories like nodemailer.createTransport(), twilio(sid), or Paystack(key) return one synchronously.
- */
 function result(rt: VerifyRuntime, module: string, chain: string[], behave?: Handler, construct?: Handler): unknown {
   const client = proxy(rt, module, chain, behave, construct) as Record<PropertyKey, unknown>;
   return new Proxy(/* biome-ignore lint/complexity/useArrowFunction: Proxy targets must be constructible */ function () {} as unknown as object, {
@@ -97,8 +83,6 @@ function result(rt: VerifyRuntime, module: string, chain: string[], behave?: Han
     construct: (_t, args) => new (client as unknown as new (...a: unknown[]) => object)(...args),
   });
 }
-
-// ---------- families ----------
 
 function redisStub(rt: VerifyRuntime, module: string): unknown {
   return proxy(rt, module, [], (chain, args, s) => {
@@ -203,7 +187,6 @@ function sqlStub(rt: VerifyRuntime, module: string): unknown {
   });
 }
 
-/** Drizzle / Knex query builders: collect the chain, execute on await. */
 function builderStub(rt: VerifyRuntime, module: string): unknown {
   const tableName = (t: unknown) => (typeof t === "string" ? t : ((t as { __table?: string })?.__table ?? "table"));
   const make = (state: { ops: string[]; table?: string; values?: unknown; loc?: object }) => {
@@ -222,7 +205,6 @@ function builderStub(rt: VerifyRuntime, module: string): unknown {
               if (write === "insert" && state.table) {
                 if (ops.includes("onConflictDoNothing") || ops.includes("ignore")) {
                   if (rt.insertIgnore(state.table, keyFields(state.values))) return [{}];
-                  // Nothing was inserted: not a performed effect.
                   rt.calls[rt.calls.length - 1]!.deduped = "conflict ignored";
                   return [];
                 }
@@ -255,7 +237,7 @@ function builderStub(rt: VerifyRuntime, module: string): unknown {
     if (/^(pgTable|mysqlTable|sqliteTable)$/.test(op)) return { __table: String(args[0]) };
     if (op === "transaction") return rt.transaction(async () => (args[0] as (tx: unknown) => unknown)(builderStub(rt, module)));
     if (chain.length === 0 && module === "knex" && typeof args[0] === "string") return make({ ops: [], table: args[0], loc: where() });
-    if (chain.length === 0) return builderStub(rt, module); // drizzle(url) / knex(config)
+    if (chain.length === 0) return builderStub(rt, module);
     if (["insert", "update", "delete", "select", "selectDistinct"].includes(op)) {
       const state = { ops: [op], table: op === "select" || op === "selectDistinct" ? undefined : tableName(args[0]), loc: where() };
       return make(state);
@@ -303,7 +285,6 @@ function mongooseStub(rt: VerifyRuntime): unknown {
   }, (chain) => (chain[chain.length - 1] === "Schema" ? {} : DEFAULT));
 }
 
-/** Providers that deduplicate on an idempotency key: the first call per key performs, the rest return its result. */
 function keyedStub(rt: VerifyRuntime, module: string, keyOf: (chain: string[], args: unknown[]) => string | undefined, extra?: Handler): unknown {
   return proxy(rt, module, [], (chain, args, s) => {
     const special = extra?.(chain, args, s);
@@ -320,7 +301,6 @@ function parseBody(body: unknown): unknown {
     if (typeof body === "string") return JSON.parse(body);
     if (body instanceof Uint8Array) return JSON.parse(Buffer.from(body).toString("utf8"));
   } catch {
-    // not JSON
   }
   return body;
 }
@@ -358,8 +338,6 @@ function awsStub(rt: VerifyRuntime, module: string): unknown {
     },
   );
 }
-
-// ---------- frameworks (captured registrations) ----------
 
 function expressStub(rt: VerifyRuntime): unknown {
   const makeApp = (): Record<string, unknown> => {
@@ -477,7 +455,6 @@ function queueStub(rt: VerifyRuntime, module: string): unknown {
   );
 }
 
-/** Webhook verification helpers: accept the payload as-is. */
 function verifierStub(rt: VerifyRuntime, module: string): unknown {
   return proxy(rt, module, [], (chain, args) => {
     const op = chain[chain.length - 1] ?? "";
@@ -490,7 +467,6 @@ function verifierStub(rt: VerifyRuntime, module: string): unknown {
 
 const random = () => randomUUID();
 
-/** Build the stub for one module specifier. */
 export function stubFor(rt: VerifyRuntime, module: string): unknown {
   if (["ioredis", "redis", "@upstash/redis"].includes(module)) return redisStub(rt, module);
   if (module === "@prisma/client") return prismaStub(rt);

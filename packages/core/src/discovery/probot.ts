@@ -7,7 +7,6 @@ function importsProbot(sf: SourceFile): boolean {
   return sf.getDescendantsOfKind(SyntaxKind.CallExpression).some((c) => c.getExpression().getText() === "require" && textOf(c.getArguments()[0]) === "probot");
 }
 
-/** Probot apps: `app.on("issues.opened", handler)`. GitHub webhooks are redelivered, so these are at-least-once. */
 export function discoverProbot(files: SourceFile[]): Candidate[] {
   const out: Candidate[] = [];
   for (const sf of files) {

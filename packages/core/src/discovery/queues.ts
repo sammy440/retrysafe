@@ -2,7 +2,6 @@ import { Node, SyntaxKind, type SourceFile } from "ts-morph";
 import { flatten, moduleOf, resolveHandler, textOf } from "../project/resolve";
 import type { Candidate } from "./types";
 
-/** BullMQ `new Worker(name, processor)` and Bull `queue.process([name], processor)`. */
 export function discoverQueues(files: SourceFile[]): Candidate[] {
   const out: Candidate[] = [];
   for (const sf of files) {
